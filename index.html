@@ -151,7 +151,7 @@ const CONFIG = {
     //   請把 image/stamp 裡的檔名填進來（INU 和倒頭不用放；就算放了，檔名含 inu／倒頭 也會自動跳過）
     //   清單是空的、或圖片讀不到時，會改畫原本的白色小貓
     MINION_IMAGES: [
-        'image/stamp/aly.png',
+        'image/stamp/Aly.png',
         'image/stamp/Eating.png',
         'image/stamp/小丸.png',
         'image/stamp/伊萊諾斯.png',
@@ -171,9 +171,11 @@ const CONFIG = {
     // ⭐️ 絕難度（通關後才會出現的按鈕）
     ULTIMATE: {
         D: 3.3,                          // 速度（震怒是 2.9）
-        DMG_MULT: 2,                     // 傷害倍率（震怒的幾倍）
+        DMG_MULT: 1.25,                  // 傷害倍率（震怒的幾倍）：一般攻擊一下約扣 33 HP
         TURNS: 18,                       // 回合數（最後一回合是絕・萬貓天動）
-        GAUNTLET_STEPS: 30               // 絕・萬貓天動的機制數
+        GAUNTLET_STEPS: 30,              // 絕・萬貓天動的機制數
+        HITBOX: 1,                       // 水晶的判定半徑（一般是 4；絕難度只剩中心一點）
+        SLOW: 0.5                        // 按住 Shift 時的移動速度倍率
     }
 };
 // 難度：D 越大，攻擊越快越密、預兆越短；DMG 是傷害倍率
@@ -440,6 +442,11 @@ const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight
 const KEYMAP2 = { z: 'ok', Z: 'ok', x: 'back', X: 'back', m: 'mute', M: 'mute',
     w: 'up', W: 'up', s: 'down', S: 'down', a: 'left', A: 'left', d: 'right', D: 'right' };
 const keyOf = e => KEYMAP[e.code] || KEYMAP2[e.key];
+// Shift：絕難度的慢速移動（同時也還是「返回」鍵）
+let slowHeld = false;
+addEventListener('keydown', e => { if (e.key === 'Shift') slowHeld = true; });
+addEventListener('keyup', e => { if (e.key === 'Shift') slowHeld = false; });
+addEventListener('blur', () => { slowHeld = false; });
 // 音量快捷鍵：- 小聲、= 大聲
 addEventListener('keydown', e => {
     if (document.querySelector('.overlay.show')) return;
@@ -586,6 +593,7 @@ let playerCode = '';
 let startTime = 0;
 
 function newBattle(ultimate = false) {
+    SR = ultimate ? CONFIG.ULTIMATE.HITBOX : 4;
     G = {
         state: 'text', t: 0, stateT: 0,
         phase: 1, route: null, D: DIFFICULTY.phase1.D, DMG: DIFFICULTY.phase1.DMG, loops: 0,
@@ -610,7 +618,8 @@ function newBattle(ultimate = false) {
             ultTurns: genUltTurns(), ultGauntlet: genUltGauntlet()
         });
         playBGM('rage', 'phase2');
-        say(['* 空氣突然變得沉重。', '* 紅貓魔王 INU 從一開始就是全力了。\n* ——絕境戰，開始。'], () => {
+        say(['* 空氣突然變得沉重。', '* 紅貓魔王 INU 從一開始就是全力了。\n* ——絕境戰，開始。',
+             '* 絕境戰中，只有水晶中心的一個點會被打中。\n* 按住 Shift 可以慢速移動，方便穿過狹窄的縫隙。'], () => {
             setBox(160, 120);
             bossSay(ULT_START, bossTurn);
         });
@@ -932,6 +941,7 @@ function nextSegment() {
     G.nextKind = kind;
 }
 function startAttack(kind, durOverride) {
+    kind = normKind(kind);
     setState('attack');
     G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
     const parts = kind.split('+'), A = ATTACKS[parts[0]];
@@ -1078,7 +1088,8 @@ function updateSoul(dt) {
     if (held.has('down')) dy += 1;
     if (G.vision) { dx = 0; dy = 0; }                      // 未來觀測中：只能看
     if (s.stun > 0) { s.stun -= dt; dx = 0; dy = 0; }      // 石化中
-    let spd = 150;
+    const slow = G.ultimate && slowHeld ? CONFIG.ULTIMATE.SLOW : 1;   // 絕難度：按住 Shift 慢速移動
+    let spd = 150 * slow;
     if (s.march && s.march.t > 0) {                        // 強制移動
         dx = s.march.vx; dy = s.march.vy; spd = MARCH_SPD;
         s.march.t -= dt;
@@ -1086,7 +1097,7 @@ function updateSoul(dt) {
     if (dx || dy) s.face = Math.atan2(dy, dx);             // 面向＝最後移動的方向（凝視用）
 
     if (s.mode === 'blue') {
-        s.x += dx * 140 * dt;
+        s.x += dx * 140 * (s.march && s.march.t > 0 ? 1 : slow) * dt;
         const floor = b.y + b.h - 9;
         if (s.ground && hit('up') && !(s.stun > 0)) { s.vy = -330; s.ground = false; }
         if (!held.has('up') && s.vy < -120) s.vy = -120;
@@ -1113,7 +1124,7 @@ function updateSoul(dt) {
 // =====================================================================
 // 碰撞
 // =====================================================================
-const SR = 4;   // 心的碰撞半徑
+let SR = 4;     // 水晶的判定半徑（絕難度會改成 CONFIG.ULTIMATE.HITBOX）
 const hitCircle = (x, y, r) => Math.hypot(G.soul.x - x, G.soul.y - y) < r + SR;
 function hitRect(x, y, w, h) {
     const cx = Math.max(x, Math.min(G.soul.x, x + w)), cy = Math.max(y, Math.min(G.soul.y, y + h));
@@ -1515,7 +1526,7 @@ function Exaflare(x, y, dx, dy, r, warn, interval) {
             t += dt;
             while (k < cells.length && t >= cells[k].at) {
                 const c = cells[k++];
-                if (hitCircle(c.x, c.y, r - 3)) damage(12);
+                if (Math.hypot(G.soul.x - c.x, G.soul.y - c.y) < r + 1) damage(12);
                 if (k % 2) SFX.boom();
             }
             return k < cells.length || t < cells[cells.length - 1].at + 0.35;
@@ -2452,7 +2463,14 @@ function halfRect(side) {
 }
 
 // 'chariot+charges' 這種混合攻擊：取第一個當主要的攻擊
-const AT = kind => ATTACKS[kind.split('+')[0]];
+// 某些機制混在一起會變成無解，換成專用的組合版本
+function normKind(kind) {
+    let parts = kind.split('+');
+    if (parts.includes('towers') && parts.includes('tether'))
+        parts = ['towerTether', ...parts.filter(p => p !== 'towers' && p !== 'tether')];
+    return parts.join('+');
+}
+const AT = kind => ATTACKS[normKind(kind).split('+')[0]];
 
 // FF14 詠唱條
 function cast(name, dur) { G.cast = { name, t: 0, dur }; SFX.cast(); }
@@ -2770,6 +2788,19 @@ const ATTACKS = {
                 if (i >= 1) spawn(AoE({ shape: 'circle', x: p.x, y: p.y, r: 30, warn }));
             });
             for (let t = 1.0; t < a.dur - 1; t += 1.4 / RATE()) a.at(t, () => rainCircle(22));
+        }
+    },
+    towerTether: {   // 踩塔＋遠近線（絕難度混合用）：連線在第 3 秒先判定，塔第 5 秒才炸開
+        box: () => [260, 160], dur: () => 12, calm: true,
+        start(a) {
+            const TW = 5.0, CT = 3.0;
+            for (let r = 0, t = 0.3; r === 0 || t + TW < a.dur + 0.2; r++, t += TW + 0.6) a.at(t, () => {
+                const p = inBox(32);
+                spawn(Tower(p.x, p.y, 28, TW));
+                const [s1, s2] = Math.random() < 0.5 ? ['left', 'right'] : ['right', 'left'];
+                spawn(TetherAdd(s1, 'near', CT, rand(-30, 30)));
+                spawn(TetherAdd(s2, 'far', CT, rand(-30, 30)));
+            });
         }
     },
     quiz: {
@@ -3575,6 +3606,15 @@ function drawSoul() {
     const ld = G.ld && G.state === 'attack' && G.debuffs.some(d => d.kind === 'ld');
     drawHeart(s.x, s.y, s.stun > 0 ? 'stone' : ld ? 'ld_' + G.ld : s.mode === 'blue' ? BLUE : RED);
     ctx.globalAlpha = 1;
+    // 絕難度：只有中心一點會被打中 → 把判定點畫出來
+    if (G.ultimate && G.state === 'attack') {
+        if (slowHeld) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.lineDashOffset = -G.t * 20;
+            ctx.beginPath(); ctx.arc(s.x, s.y, 13, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        }
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = RED; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
     // 數字 debuff（肉球序列）：水晶右上角直接顯示阿拉伯數字
     const lim = G.state === 'attack' && G.debuffs.find(d => d.kind === 'limit');
     if (lim) {

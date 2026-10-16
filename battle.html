@@ -1,0 +1,4179 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>魔王城・最終決戰</title>
+<style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden;
+        font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; }
+    #game { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(100vw, 133.33vh); height: min(75vw, 100vh); }
+
+    .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+        background: #000; z-index: 10; padding: 20px; }
+    .overlay.show { display: flex; }
+    .panel { width: 100%; max-width: 420px; border: 3px double #c9a86a; border-radius: 10px; background: rgba(20, 16, 28, 0.92); box-shadow: 0 0 25px rgba(201, 168, 106, 0.15); padding: 30px 28px; text-align: center; }
+    .panel h1 { margin: 0 0 6px; font-size: 1.7rem; letter-spacing: 4px; color: #ff4b6e; }
+    .panel .sub { color: #aaa; font-size: 0.9rem; margin-bottom: 24px; line-height: 1.7; }
+    .panel label { display: block; text-align: left; font-size: 0.9rem; margin: 14px 0 6px; color: #c9a86a; }
+    .panel input { width: 100%; padding: 12px; font-size: 1.2rem; background: #0b0910; color: #efe3c4;
+        border: 2px solid #6b5a35; border-radius: 6px; font-family: monospace; letter-spacing: 4px; text-transform: uppercase; }
+    .panel input:focus { outline: none; border-color: #7dd3fc; box-shadow: 0 0 10px rgba(125, 211, 252, 0.4); }
+    .panel button { margin-top: 24px; width: 100%; padding: 14px; font-size: 1.15rem; font-weight: bold;
+        background: #14101c; color: #efe3c4; border: 2px solid #c9a86a; border-radius: 6px; cursor: pointer; font-family: inherit; }
+    .panel button:hover, .panel button:focus-visible { color: #fff; border-color: #7dd3fc; box-shadow: 0 0 12px rgba(125, 211, 252, 0.5); outline: none; }
+    .panel button:disabled { opacity: 0.5; cursor: wait; }
+    .panel button.ult { margin-top: 12px; font-size: 1rem; color: #ffb4c2; border-color: #ff4b6e; background: #1c0b12; }
+    .panel button.ult:hover, .panel button.ult:focus-visible { color: #fff; border-color: #ff4b6e; box-shadow: 0 0 14px rgba(255, 75, 110, 0.6); }
+    .err { color: #ff4b6e; min-height: 1.4em; margin-top: 12px; font-size: 0.95rem; }
+    .keys { margin-top: 22px; font-size: 0.8rem; color: #888; line-height: 1.9; }
+    .keys b { color: #fff; border: 1px solid #666; padding: 0 6px; margin: 0 2px; font-family: monospace; }
+
+    .win-code { font-family: monospace; font-size: 3rem; letter-spacing: 10px; color: #ffd000; margin: 10px 0 4px; }
+    .win-route { font-size: 1.3rem; margin: 18px 0 6px; }
+    .win-meta { color: #aaa; font-size: 0.9rem; line-height: 1.8; }
+    .win-note { margin-top: 18px; color: #ff7300; font-weight: bold; line-height: 1.7; }
+    .tribute { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #444; color: #777; font-size: 0.72rem; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="1280" height="960"></canvas>
+
+<!-- 入口：輸入契約碼與通關鑰匙 -->
+<div class="overlay show" id="gate">
+    <div class="panel">
+        <h1>魔王城・王座之間</h1>
+        <div class="sub">紅貓魔王就在門的另一側。<br>出示你的契約與鑰匙吧，光之戰士。</div>
+        <label for="codeInput">魔書契約碼</label>
+        <input id="codeInput" maxlength="4" autocomplete="off" placeholder="XXXX">
+        <label for="keyInput">通關鑰匙</label>
+        <input id="keyInput" maxlength="20" autocomplete="off" placeholder="由魔王親自交付">
+        <button id="enterBtn">推開大門</button>
+        <div class="err" id="gateErr"></div>
+        <div class="keys">操作：<b>↑↓←→</b> 移動　<b>Z</b>/<b>Enter</b> 確認　<b>X</b>/<b>Shift</b> 取消　<b>M</b> 靜音　<b>-</b>/<b>=</b> 音量</div>
+        <div class="tribute">
+            ※ 本戰鬥的玩法致敬 Toby Fox 的《UNDERTALE》，以及《FINAL FANTASY XIV》的副本機制。<br>
+            本作為非營利的玩家同人活動作品，與原作及其版權方無任何關係。
+        </div>
+    </div>
+</div>
+
+<!-- 勝利畫面 -->
+<div class="overlay" id="victory">
+    <div class="panel">
+        <h1 id="winTitle">勝利</h1>
+        <div class="win-route" id="winRoute"></div>
+        <div class="win-code" id="winCode"></div>
+        <div class="win-meta" id="winMeta"></div>
+        <div class="win-note">請將此畫面出示給紅貓魔王 INU<br>領取最後的紋章</div>
+        <div class="tribute">
+            戰鬥玩法致敬 Toby Fox《UNDERTALE》與《FINAL FANTASY XIV》<br>
+            非營利玩家同人作品，與原作及其版權方無關<br>
+            感謝每一位陪 INU 玩到最後的光之戰士 🐾
+        </div>
+        <button id="againBtn">再挑戰一次</button>
+        <button id="ultBtn" class="ult">太簡單？來試試絕難度吧</button>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+// ⭐️ 設定區
+// =====================================================================
+const CONFIG = {
+    BATTLE_KEY: 'NYAN',                  // 通關鑰匙（不分大小寫）
+    REQUIRE_STAMP: 16,                   // 需要已拿到這號紋章才能進入（0 = 不檢查）
+    BOSS_NAME: 'INU',
+    // 魔王立繪（放在 image 資料夾；某張找不到時會改用第一階段的圖，全部找不到時顯示暫代像素貓）
+    BOSS_IMAGES: {
+        phase1: 'image/boss_phase1.png',   // 第一階段：平常
+        play:   'image/boss_play.png',     // 第二階段（感化路線）：享受遊戲
+        rage:   'image/boss_rage.png',     // 第二階段（討伐路線）：震怒
+        tired:  'image/boss_tired.png'     // 疲勞（震怒限定）
+    },
+    // ⭐️ 音樂設定
+    //   src：檔案位置　start：從第幾秒開始播（循環時也會跳回這裡）
+    //   end：播到第幾秒就跳回 start（0 = 播到最後）　volume：這首歌的音量（0 ~ 1）
+    MUSIC: {
+        phase1: { src: 'image/battle.mp3',       start: 1.5, end: 0, volume: 0.6 },   // 第一階段
+        play:   { src: 'image/battle2_play.mp3', start: 1.5, end: 0, volume: 0.6 },   // 第二階段・感化路線
+        rage:   { src: 'image/battle2_rage.mp3', start: 1.5, end: 0, volume: 0.7 },   // 第二階段・討伐路線
+        phase2: { src: 'image/battle2.mp3',      start: 1.5, end: 0, volume: 0.6 }    // 上面兩首沒有時的共用曲
+    },
+    MUSIC_VOLUME: 0.8,                   // 音樂總音量（0 ~ 1），遊戲中可用 - / = 鍵調整
+    SFX_VOLUME: 1.0,                     // 音效音量（0 ~ 1）
+    PLAYER_HP: 99,
+    BOSS_HP: 760,                        // 第一階段血量
+    PHASE2_AT: 240,                      // 第一階段血量打到這裡以下 → 進入第二階段（震怒）
+    PHASE2_HP: 600,                      // 第二階段血量
+    ENRAGE_AT: 0.2,                      // 第二階段血量剩這個比例以下 → 下一回合直接放絕・萬貓天動
+    ENRAGE_BLOCKS: 3,                    // 機制還沒跑完就要打到 20% 時，INU 會擋下攻擊；最多擋這麼多次，之後就直接進絕・萬貓天動
+    SEE_ALL_MECHANICS: true,             // true：每個階段的機制全部出現過之前，INU 會硬撐著不倒（血量停在門檻上）
+    MERCY_BREAK_AT: 80,                  // 第一階段感化值達到這裡後嘗試感化 → INU 打碎感化按鈕（遊戲）
+    // ⭐️ 守門騎士・倒頭（另一關的關主，第二階段中途加入 INU 一起戰鬥）
+    KNIGHT: {
+        NAME: '倒頭',
+        STAGE: 'top',                    // 'top'：合體技期間和 INU 並排站在上面（讀條在戰鬥框的小人身上）／'box'：只出現在戰鬥框裡
+        TITLE: '魔王城守衛・參戰',
+        IMAGE: 'image/knight.png',       // 騎士的圖（找不到時顯示暫代的剪影）
+        INTRO: ['……光之戰士。', '在城門口放你過去，是我此生最大的失職。', 'INU 大人，請允許在下一同作戰！']
+    },
+    // ⭐️ 援軍（友軍）：在倒頭加入之後趕來幫你，二對二
+    ALLY: {
+        NAME: '援軍騎士',
+        TITLE: '援軍登場',
+        IMAGE: 'image/ally.png',         // 援軍的圖（找不到時顯示暫代的藍色剪影）
+        INTRO: ['光之戰士！抱歉，我來遲了。', '對面有兩個人？那我們也是兩個人！', '接下來配合我的動作——\n我們一起解決牠們！']
+    },
+    // ⭐️ 攻擊：騎士的基礎連擊＋極限技
+    COMBAT: {
+        GCD: 1.2,                        // 公共冷卻（秒）：技能上的暗色轉圈
+        PERFECT: 0.15,                   // 轉圈剩這麼多秒以內按下＝完美
+        GOOD: 0.4,                       // 轉圈剩這麼多秒以內按下＝良好；再早＝太早（傷害大減）
+        GRACE: 0.12,                     // 轉完之後還可以補按的時間；超過就「超時」、連擊結束
+        SKILLS: [
+            { name: '先鋒劍', base: 6, hue: '#3b82f6' },
+            { name: '暴亂劍', base: 8, hue: '#6366f1' },
+            { name: '王權劍', base: 11, hue: '#d97706' }
+        ],
+        PERFECT_BONUS: 5,                // 三招都完美的額外傷害
+        LB_PERFECT: 1 / 5,               // 一回合完全沒受傷：LB 量表 +1/5 格
+        LB_HURT: 1 / 12,                 // 有受傷但沒倒下：+1/12 格
+        LB: [null,
+            { name: '勇猛烈斬', dmg: 35 },                     // LB1：沒有演出，可重複使用
+            { name: '刃舞', dmg: 70 },                         // LB2：沒有演出，可重複使用
+            { name: '光之戰士・終焉一閃', dmg: 170 }]           // LB3：完整演出，整場只能用一次
+    },
+    // ⭐️ 小貓兵的圖：每一隻小貓兵（連線、突進、小貓砲）會從這裡隨機挑一張
+    //   請把 image/stamp 裡的檔名填進來（INU 和倒頭不用放；就算放了，檔名含 inu／倒頭 也會自動跳過）
+    //   清單是空的、或圖片讀不到時，會改畫原本的白色小貓
+    MINION_IMAGES: [
+        'image/stamp/Aly.png',
+        'image/stamp/Eating.png',
+        'image/stamp/小丸.png',
+        'image/stamp/伊萊諾斯.png',
+        'image/stamp/赤羽.png',
+        'image/stamp/洛摩.png',
+        'image/stamp/美華.png',
+        'image/stamp/甜甜圈.png',
+        'image/stamp/終結.png',
+        'image/stamp/堡.png',
+        'image/stamp/斯咪.png',
+        'image/stamp/溫斯頓.png',
+        'image/stamp/維稀爾.png',
+        'image/stamp/燎.png',
+        'image/stamp/貓糕.png',
+    ],
+    MINION_EXCLUDE: ['inu', '倒頭'],    // 檔名包含這些字的圖不會被選到（不分大小寫）
+    // ⭐️ 絕難度（通關後才會出現的按鈕）
+    ULTIMATE: {
+        D: 3.3,                          // 速度（震怒是 2.9）
+        DMG_MULT: 2,                     // 傷害倍率（震怒的幾倍）
+        TURNS: 18,                       // 回合數（最後一回合是絕・萬貓天動）
+        GAUNTLET_STEPS: 30               // 絕・萬貓天動的機制數
+    }
+};
+// 難度：D 越大，攻擊越快越密、預兆越短；DMG 是傷害倍率
+const DIFFICULTY = {
+    phase1: { D: 1.0, DMG: 1.0 },
+    play:   { D: 1.9, DMG: 1.5 },        // 感化路線進入第二階段：魔王在「享受遊戲」
+    rage:   { D: 2.9, DMG: 2.2 }         // 戰鬥路線進入第二階段：魔王震怒（還會加上小貓砲騷擾）
+};
+// 測試用隱藏密碼：戰鬥中直接在鍵盤上打出這串字母，就會開啟／關閉無敵模式
+const CHEAT_CODE = 'GODCAT';
+const API_URL = "https://script.google.com/macros/s/AKfycbzhmLK2BTTQQ4hej4SHwhzOgYWhoI5u29c4d6iDeaWyFz97ydRNYbCC32hUnJ129_0Wdw/exec";
+
+// attack 可以是一個攻擊，或是一串攻擊（連續技，一個接一個不回到選單）
+const TURNS_1 = [
+    { line: '看清楚地上的預兆，\n光之戰士！', attack: 'aoe' },
+    { line: '光與暗——\n站到跟你一樣顏色的地方！', attack: 'lightDark' },
+    { line: '本大爺的爪子瞄準你了！\n引導完就快逃！', attack: 'baitCone' },
+    { line: '來玩點不一樣的——\nINU 的猜謎秀，開始！', attack: 'quiz' },
+    { line: '小貓兵，衝鋒！\n別站在牠們的路上！', attack: 'charges' },
+    { line: '感受重力吧！\n光與暗的劍，分得清楚嗎？', attack: 'gravity' },
+    { line: '本大爺看見了……\n你的未來！', attack: 'future' },
+    { line: '本大爺先教你——\n鋼鐵要遠離，月環要靠近！', attack: 'chariot' },
+    { line: '看著本大爺的眼睛……\n不，千萬別看！', attack: 'gaze' },
+    { line: '每一座塔都要踩！\n一座都不准漏！', attack: 'towers' },
+    { line: '本大爺的地火，\n你打算放在哪裡呢？', attack: 'fireBait' },
+    { line: '被推出去之後……\n中間可是會爆炸的喔！', attack: 'knockChariot' },
+    { line: '肉球光輪，\n轉起來吧！', attack: 'rotLaser' },
+    { line: '再來一題！\n這次你一定答不出來！', attack: 'quiz' },
+    { line: '你腳下的地板……\n還撐得住嗎？', attack: 'tileFall' },
+    { line: '頭上的箭頭，\n可不是裝飾喔！', attack: 'march' },
+    { line: '再看一次未來吧……\n這次你還記得住嗎？', attack: 'future' },
+    { line: '小貓兵們，\n用連線綁住他！', attack: 'tether' },
+    { line: '十字斬？斜十字斬？\n看清楚再跑！', attack: 'cross' },
+    { line: '看清楚你的號碼！\n只有輪到你的圈才能站！', attack: 'limitCut' },
+    { line: '隕石要落下來了——\n跑得越遠越好！', attack: 'proximity' },
+    { line: '小心別撞到牆上的刺！', attack: 'knockback' },
+    { line: '連續技！\n光暗接小貓兵突進！', attack: ['lightDark', 'charges'] }
+];
+
+// rage：震怒路線改用的攻擊
+// intro: 'knight' / 'ally' → 這一回合開始前，播放守門騎士（敵）／援軍（友）登場的演出（各只播一次）
+const TURNS_2 = [
+    { line: '重力之後是突進！\n跟得上嗎？', attack: ['gravity', 'charges'] },
+    { line: '鋼鐵？月環？\n這次可不會畫給你看了！', attack: 'chariot' },
+    { line: '連鎖爆炎！\n找到已經炸過的地方吧！', attack: 'exaflare' },
+    { line: '地火放錯地方的話……\n可是會自己害死自己喔！', attack: 'fireBait' },
+    { line: '小貓兵們，\n一靠近一遠離！', attack: 'tether' },
+    { line: '本大爺看見了……\n你的未來！', attack: 'future' },
+    { line: '猜謎秀時間！\n這次可沒那麼多時間給你想！', attack: 'quiz' },
+    { line: '來得正好！\n讓這傢伙見識一下\n我們的合體技！', attack: 'twinBoss', intro: 'knight' },
+    { line: '時間……\n停止吧。', attack: 'timeStop' },
+    { line: '預兆之後是塔！\n記得踩好踩滿！', attack: ['aoe', 'towers'] },
+    { line: '先引導扇形，\n再讓地板崩落！', attack: ['baitCone', 'tileFall'] },
+    { line: '未來觀測——\n這次你記得住嗎？', attack: 'future' },
+    { line: '……又來一個礙事的？\n兩個一起收拾掉！', attack: 'allyDuo', intro: 'ally' },
+    { line: '號碼牌發下去了！\n記住你的順序！', attack: 'limitCut' },
+    { line: '鋼鐵月環，\n接十字斬！', attack: ['chariot', 'cross'],
+      rage: { line: '把本大爺的詠唱\n全部記住吧……如果你記得住的話！', attack: 'delayed' } },
+    { line: '凝視與隕石，\n一起上吧！', attack: ['gaze', 'proximity'] },
+    { line: '倒頭！\n再來一次合體技！', attack: 'twinBoss' },
+    { line: '最後的猜謎！\n答錯的話就把你變成貓！', attack: 'quiz' },
+    { line: '藍色的水晶\n躲得過落雷嗎？', attack: 'gravityBlast' },
+    { line: '擊退回中心！\n然後……不准動！', attack: ['knockDynamo', 'accelBomb'] },
+    { line: '箭頭和光暗，\n你分得清楚嗎？', attack: ['march', 'lightDark'],
+      rage: { line: '再來一次延遲詠唱！\n這次可沒有提示了！', attack: 'delayed' } },
+    { line: '絕・萬貓天動！！', attack: 'enrage' }
+];
+
+// =====================================================================
+// 絕難度：回合隨機產生、機制會混在一起
+// =====================================================================
+const ATTACK_NAME = {
+    aoe: '地面預兆', lightDark: '光暗之陣', rotLaser: '肉球光輪', march: '強制移動', chariot: '鋼鐵月環', towers: '踩塔',
+    knockback: '擊退', exaflare: '連鎖爆炎', proximity: '肉球隕石', cross: '十字斬', tileFall: '大地崩落',
+    knockChariot: '擊退鋼鐵', knockDynamo: '擊退月環', knockTower: '擊退踩塔', limitCut: '肉球序列', fireBait: '烈焰足跡',
+    charges: '小貓兵突進', gaze: '石化凝視', baitCone: '肉球扇擊', tether: '小貓兵連線', accelBomb: '加速度炸彈'
+};
+const ULT_ZONE = ['aoe', 'lightDark', 'rotLaser', 'march', 'chariot', 'towers', 'knockback', 'exaflare', 'proximity', 'cross',
+    'tileFall', 'knockChariot', 'knockDynamo', 'knockTower', 'limitCut', 'fireBait'];
+const ULT_OVER = ['charges', 'gaze', 'baitCone', 'tether', 'accelBomb'];
+// 混在一起會變成無解的組合
+const ULT_BAD = { accelBomb: ['rotLaser', 'exaflare', 'march', 'knockback', 'knockChariot', 'knockDynamo', 'knockTower', 'fireBait'] };
+const ULT_SOLO = {
+    future: ['本大爺看見了……\n你的未來！', '未來觀測——\n這次可是β版！'],
+    timeStop: ['時間……\n停止吧。'],
+    gravity: ['感受重力吧！\n光與暗的劍，分得清楚嗎？'],
+    gravityBlast: ['藍色的水晶\n躲得過落雷嗎？'],
+    quiz: ['猜謎秀時間！\n答錯可是會很痛的喔！'],
+    delayed: ['把本大爺的詠唱\n全部記住吧！'],
+    twinBoss: ['倒頭！\n再來一次合體技！'],
+    allyDuo: ['又是那個援軍……\n兩個一起收拾掉！']
+};
+const ULT_START = ['……你以為本大爺之前\n是認真的嗎？', '這次——\n從一開始就是全力！'];
+function ultMix() {
+    let z = pick(ULT_ZONE);
+    const overs = shuffle(ULT_OVER.filter(o => !(ULT_BAD[o] || []).includes(z))).slice(0, Math.random() < 0.3 ? 2 : 1);
+    return [z, ...overs];
+}
+function genUltTurns() {
+    const n = CONFIG.ULTIMATE.TURNS, turns = [];
+    const solos = ['future', 'future', 'timeStop', 'gravity', 'gravityBlast', 'quiz', 'delayed', 'twinBoss'];
+    let lastZone = null;
+    while (turns.length < n - solos.length - 3) {
+        const m = ultMix();
+        if (m[0] === lastZone) continue;
+        lastZone = m[0];
+        if (Math.random() < 0.25) {   // 兩段連續技
+            let z2; do { z2 = pick(ULT_ZONE); } while (z2 === m[0]);
+            turns.push({ line: `${ATTACK_NAME[m[0]]}加上${ATTACK_NAME[m[1]]}，\n再接${ATTACK_NAME[z2]}！`, attack: [m.join('+'), z2] });
+        } else {
+            const names = m.map(k => ATTACK_NAME[k]);
+            const line = names.length === 3 ? `${names[0]}、${names[1]}，\n還有${names[2]}！全部一起來！` : `${names[0]}——\n再加上${names[1]}！`;
+            turns.push({ line, attack: m.join('+') });
+        }
+    }
+    solos.forEach(k => turns.splice(randi(0, turns.length), 0, { line: pick(ULT_SOLO[k]), attack: k }));
+    const mid = Math.floor(turns.length / 2);
+    turns.splice(mid, 0, { line: '來得正好！\n讓這傢伙見識一下\n我們的合體技！', attack: 'twinBoss', intro: 'knight' });
+    turns.splice(randi(mid + 2, turns.length), 0, { line: '……又來一個礙事的？\n兩個一起收拾掉！', attack: 'allyDuo', intro: 'ally' });
+    // 未來觀測不要連續出現
+    for (let i = 1; i < turns.length; i++) if (turns[i].attack === 'future' && turns[i - 1].attack === 'future') { const t = turns.splice(i, 1)[0]; turns.splice(Math.max(0, i - 3), 0, t); }
+    turns.push({ line: '絕・萬貓天動・真！！', attack: 'enrage' });
+    return turns;
+}
+// 絕難度的絕・萬貓天動：30 個機制隨機排列
+const ULT_G_POOL = { lightDark: 3.0, charges: 3.0, slam: 4.3, march: 3.8, aoe: 3.0, rotLaser: 3.2, arenaShift: 3.5, exaflare: 4.6,
+    gaze: 3.0, chariot: 3.4, cross: 3.0, tileFall: 4.2, limitCut: 6.4, timeStop: 4.6, accelBomb: 5.6, proximity: 3.0,
+    knockDynamo: 3.4, knockChariot: 3.2, towers: 3.4, baitCone: 3.0, tether: 3.6 };
+function genUltGauntlet() {
+    const keys = Object.keys(ULT_G_POOL), picks = [];
+    while (picks.length < CONFIG.ULTIMATE.GAUNTLET_STEPS - 3) {
+        const k = pick(keys);
+        if (picks[picks.length - 1] === k) continue;
+        picks.push(k);
+    }
+    picks.splice(randi(3, 10), 0, 'futureMini');
+    picks.splice(randi(16, picks.length), 0, 'futureMini');
+    const steps = [];
+    picks.forEach((k, i) => {
+        if (i === Math.floor(picks.length / 2)) steps.push({ talk: ['……哈……哈……', '這樣……還打不倒你嗎……', '那就——全部給本大爺消失吧！！'] });
+        let kind = k, d = k === 'futureMini' ? 8.6 : ULT_G_POOL[k];
+        if (ULT_ZONE.includes(k) && Math.random() < 0.35) {   // 有時候混一個騷擾機制
+            const o = pick(['charges', 'gaze', 'baitCone'].filter(x => !(ULT_BAD[x] || []).includes(k)));
+            kind = k + '+' + o;
+        }
+        steps.push({ k: kind, d });
+        const nCut = Math.random() < 0.3 ? 2 : 1;
+        for (let c = 0; c < nCut; c++) steps.push({ cut: pick(['black', 'black', 'white', 'flash']) });
+    });
+    steps.push({ k: 'finale', d: 20.0 });
+    return steps;
+}
+
+// 猜謎秀題目：answer 是正確選項（0~3），-1 = 全部都對
+const QUIZ = [
+    { q: '傳說中統治世界的，\n一共有幾位？', options: ['16', '17', '18', '9'], answer: 1 },
+    { q: '「INU」在日文裡\n是什麼意思？', options: ['貓', '狗', '魔王', '可愛'], answer: 1 },
+    { q: '本大爺可愛嗎？', options: ['可愛', '可愛', '可愛', '可愛'], answer: -1 },
+    { q: '哪一位惡魔貓\n其實是兔子？', options: ['長耳貓', '罐罐強盜', '奶茶神偷', '柔軟奶油貓'], answer: 0 },
+    { q: '守護天節的封印，\n是誰完成的？', options: ['光之戰士', '莫古力', '陸行鳥', '兔子'], answer: 0 }
+];
+
+const FLAVOR_1 = [
+    '* INU 舔了舔爪子。',
+    '* INU 的尾巴不耐煩地拍打著王座。',
+    '* 空氣中飄著罐罐的香味。',
+    '* INU 偷偷看了你一眼，又假裝沒看。',
+    '* INU 打了個呵欠……然後假裝沒打。'
+];
+const FLAVOR_PLAY = [
+    '* INU 的紅眼閃閃發亮，看起來玩得很開心。',
+    '* INU 哼著不成調的歌。',
+    '* INU 興奮地甩著尾巴。',
+    '* 「再來！再來！」INU 喊著。'
+];
+const FLAVOR_RAGE = [
+    '* INU 的雙眼燃燒著紅光。',
+    '* 王座之間的空氣在震動。',
+    '* 碎裂的感化按鈕散落在地上。',
+    '* INU 的呼吸越來越急促了。'
+];
+
+// 「行動」：mercy 是感化值；連續兩次做同一件事，效果減半
+const ACTS = [
+    { name: '查看', mercy: 0,
+      text: '* INU － 自封的毛茸茸暗黑霸主。\n* 看起來很想被誇獎。',
+      text2: '* INU（覺醒）－ 已經聽不進任何話了。\n* ……真的嗎？' },
+    { name: '稱讚可愛', mercy: 10,
+      text: '* 你稱讚 INU 很可愛。\n* INU 的尾巴不自覺地搖了起來。',
+      text2: '* 你稱讚 INU 很可愛。\n* INU 咬緊牙關，假裝沒聽見。' },
+    { name: '摸頭', mercy: 8,
+      text: '* 你摸了摸 INU 的頭。\n* INU 嘴上說著「放肆！」，耳朵卻垂了下來。',
+      text2: '* 你伸出手……\n* INU 一爪拍開了你的手。' },
+    { name: '陪他玩毛線', mercy: 9,
+      text: '* 你滾出一顆毛線球。\n* INU 忍不住撲了上去。',
+      text2: '* 你滾出一顆毛線球。\n* INU 一爪把它打得粉碎。' },
+    { name: '喵喵叫', mercy: 5,
+      text: '* 你「喵～」了一聲。\n* INU 愣了一下，小聲地「喵」了回來。',
+      text2: '* 你「喵～」了一聲。\n* INU 發出了低沉的吼聲。' },
+    { name: '給罐罐', mercy: 15, once: true,
+      text: '* 你拿出了罐罐。\n* INU 的眼睛整個亮了起來！',
+      usedText: '* 你的罐罐已經被吃光了。' }
+];
+
+const ITEMS = [
+    { name: '小魚乾', heal: 30, count: 10, text: '* 你吃了小魚乾。' },
+    { name: '奶茶', heal: 50, count: 5, text: '* 你喝了奶茶。\n* 沒有被奶茶神偷 shot 掉，真是萬幸。' },
+    { name: '貓草餅乾', heal: 99, count: 3, text: '* 你吃了貓草餅乾。\n* 感覺整個人都飄飄然的。' },
+    // 焦糖布丁：持續回血（每回合結束時回復 hot.per，共 hot.turns 回合；再吃一次會重新計算回合數）
+    { name: '焦糖布丁', heal: 0, hot: { per: 20, turns: 3 }, count: 1,
+      text: '* 你吃了焦糖布丁。\n* 色澤、彈性、甜度、焦糖……\n* 布丁審判官遠遠地點了點頭：「無罪。」',
+      text2: '* 「……還有嗎？」\n* 接下來 3 回合，每回合結束時回復 20 HP。' }
+];
+
+// 第一階段 → 第二階段的過場
+const TRANSITION = {
+    play: ['……', '也許……\n就這樣算了也不錯……', '……不。', '本大爺……\n是要統治世界的魔王！', '誰需要你的感化！！'],
+    rage: ['……很痛啊。', '你以為這樣\n就能打倒本大爺？', '看來你根本\n不需要什麼感化吧！']
+};
+const PHASE2_START = {
+    play: ['呵呵……呵呵呵……', '既然你這麼想陪本大爺玩——', '那就陪到最後吧！'],
+    rage: ['你惹火本大爺了……', '準備好被肉球\n碾成粉末吧！！']
+};
+const PHASE2_END = {
+    lines: ['哈……哈……', '為什麼……\n為什麼你還站著……'],
+    narr: '* INU 已經沒有力氣再戰鬥了。\n* 碎裂的感化按鈕……重新拼湊了起來。'
+};
+
+const ENDINGS = {
+    fight: {
+        lines: ['不……本大爺的肉球……\n竟然……', '……哼，算你厲害，\n光之戰士。'],
+        narr: '* 紅貓魔王再次被封印進了魔書之中。',
+        title: '封印成功', route: '⚔ 討伐路線'
+    },
+    spare: {
+        lines: ['……你是第一個\n一直不肯放棄本大爺的人。', '好吧……\n今天就放過這個世界。'],
+        narr: '* INU 開心地在你腳邊打滾。\n* 世界和平了（大概）。',
+        title: '和平降臨', route: '🐾 感化路線'
+    }
+};
+
+const DEATH_1 = ['* 阿謝姆水晶在你手中發出微弱的光芒，', '* 令你充滿了 ＊希望＊。'];
+const DEATH_2 = ['* 這一場噩夢將會延續下去……', '* 但是，水晶的光芒拒絕熄滅。'];
+
+// =====================================================================
+// 基本設定
+// =====================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.scale(2, 2);
+const W = 640, H = 480;
+const FONT = '"Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif';
+const YELLOW = '#ffd000', ORANGE = '#ff7300', RED = '#ff2a55', BLUE = '#38bdf8', GREEN = '#4ade80';
+const AOE = 'rgba(255, 130, 40, ';
+// 介面配色（FF14 風格：深色底＋金色邊框，選取時發出水晶藍光）
+const UI_GOLD = '#c9a86a', UI_GOLD_DARK = '#6b5a35', UI_TEXT = '#efe3c4', UI_PANEL = 'rgba(20, 16, 28, 0.92)', UI_SELECT = '#7dd3fc';
+
+// ----- 輸入 -----
+const held = new Set(), pressed = new Set();
+const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right',
+    KeyZ: 'ok', Enter: 'ok', KeyX: 'back', ShiftLeft: 'back', ShiftRight: 'back', KeyM: 'mute',
+    Digit1: 's1', Digit2: 's2', Digit3: 's3', Numpad1: 's1', Numpad2: 's2', Numpad3: 's3' };
+const KEYMAP2 = { z: 'ok', Z: 'ok', x: 'back', X: 'back', m: 'mute', M: 'mute',
+    w: 'up', W: 'up', s: 'down', S: 'down', a: 'left', A: 'left', d: 'right', D: 'right' };
+const keyOf = e => KEYMAP[e.code] || KEYMAP2[e.key];
+// 音量快捷鍵：- 小聲、= 大聲
+addEventListener('keydown', e => {
+    if (document.querySelector('.overlay.show')) return;
+    if (e.key === '-' || e.key === '_') setMusicVolume(musicVol - 0.1);
+    if (e.key === '=' || e.key === '+') setMusicVolume(musicVol + 0.1);
+});
+addEventListener('keydown', e => {
+    if (document.querySelector('.overlay.show')) return;
+    const k = keyOf(e);
+    if (!k) return;
+    e.preventDefault();
+    if (!held.has(k)) pressed.add(k);
+    held.add(k);
+    initAudio();
+});
+addEventListener('keyup', e => { const k = keyOf(e); if (k) held.delete(k); });
+addEventListener('blur', () => held.clear());
+canvas.addEventListener('mousedown', () => { pressed.add('ok'); initAudio(); });
+const hit = k => pressed.has(k);
+
+// ----- 測試用：無敵模式 -----
+let GOD = false, cheatBuf = '';
+addEventListener('keydown', e => {
+    if (document.querySelector('.overlay.show') || !G) return;
+    if (e.key && e.key.length === 1) {
+        cheatBuf = (cheatBuf + e.key.toUpperCase()).slice(-20);
+        if (cheatBuf.endsWith(CHEAT_CODE)) {
+            GOD = !GOD; cheatBuf = '';
+            GOD ? SFX.correct() : SFX.wrong();
+            return;
+        }
+    }
+    if (!GOD) return;
+    // 無敵模式下的測試快捷鍵
+    if (e.code === 'KeyN' && G.state === 'attack') G.attack.t = G.attack.dur;          // 跳過目前的攻擊
+    if (e.code === 'KeyH') G.hp = CONFIG.PLAYER_HP;                                     // 補滿血
+    if (G.state === 'menu' && G.phase === 1) {
+        if (e.code === 'KeyK') breakMercy('rage');                                       // 直接進入第二階段（震怒）
+        if (e.code === 'KeyL') breakMercy('play');                                       // 直接進入第二階段（遊戲）
+    }
+    if (G.state === 'menu' && e.code === 'KeyJ') {                                       // 跳到下一回合
+        const list = turnList();
+        G.turn = (G.turn + 1) % list.length; SFX.move();
+    }
+});
+
+// ----- 音效 -----
+let actx = null, muted = false, bgm = null;
+function initAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+}
+function beep(freq, dur, type = 'square', vol = 0.06, slide = 0) {
+    if (!actx || muted) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq;
+    if (slide) o.frequency.linearRampToValueAtTime(Math.max(30, freq + slide), actx.currentTime + dur);
+    g.gain.value = vol * CONFIG.SFX_VOLUME;
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+}
+const SFX = {
+    text: () => beep(520 + Math.random() * 60, 0.03, 'square', 0.025),
+    boss: () => beep(G && G.phase === 2 ? 180 : 260 + Math.random() * 40, 0.04, 'square', 0.03),
+    move: () => beep(880, 0.04, 'square', 0.04),
+    select: () => beep(660, 0.08, 'square', 0.05, 300),
+    hurt: () => beep(220, 0.25, 'sawtooth', 0.08, -150),
+    slash: () => beep(1200, 0.18, 'sawtooth', 0.05, -900),
+    heal: () => { beep(523, 0.1); setTimeout(() => beep(784, 0.15), 90); },
+    correct: () => { beep(660, 0.1); setTimeout(() => beep(990, 0.2), 100); },
+    wrong: () => beep(140, 0.4, 'sawtooth', 0.08, -60),
+    shatter: () => beep(300, 0.6, 'sawtooth', 0.1, -280),
+    block: () => beep(1400, 0.05, 'square', 0.05),
+    warn: () => beep(440, 0.08, 'triangle', 0.05),
+    boom: () => beep(90, 0.3, 'sawtooth', 0.09, -40),
+    blast: () => beep(160, 0.4, 'sawtooth', 0.06, 200),
+    cast: () => beep(330, 0.15, 'triangle', 0.04, 220),
+    soak: () => beep(780, 0.12, 'triangle', 0.05),
+    mode: () => { beep(300, 0.08); setTimeout(() => beep(450, 0.1), 70); },
+    crack: () => { beep(900, 0.06, 'square', 0.08); setTimeout(() => beep(200, 0.5, 'sawtooth', 0.1, -150), 60); }
+};
+// 播放音樂：可以給多首（例如 'rage', 'phase2'），第一首找不到就自動試下一首
+// 會從設定的 start 秒數開始播，播完（或到 end 秒）再跳回 start，避開開頭的空白
+let musicVol = CONFIG.MUSIC_VOLUME, curTrack = null, volShowT = 0;
+function playBGM(...keys) {
+    if (bgm) { bgm.pause(); bgm = null; }
+    const list = keys.filter(k => CONFIG.MUSIC[k] && CONFIG.MUSIC[k].src);
+    if (!list.length) return;
+    const tr = CONFIG.MUSIC[list[0]];
+    const a = new Audio(tr.src);
+    a.loop = false; a.muted = muted;
+    a.volume = Math.min(1, (tr.volume ?? 1) * musicVol);
+    const toStart = () => { try { a.currentTime = tr.start || 0; } catch (e) {} };
+    a.addEventListener('loadedmetadata', toStart, { once: true });
+    a.addEventListener('ended', () => { toStart(); a.play().catch(() => {}); });
+    a.addEventListener('timeupdate', () => { if (tr.end && a.currentTime >= tr.end) toStart(); });
+    a.addEventListener('error', () => { if (bgm === a) { bgm = null; playBGM(...list.slice(1)); } }, { once: true });
+    bgm = a; curTrack = tr;
+    a.play().catch(() => {});
+}
+function setMusicVolume(v) {
+    musicVol = Math.max(0, Math.min(1, v));
+    if (bgm && curTrack) bgm.volume = Math.min(1, (curTrack.volume ?? 1) * musicVol);
+    volShowT = 1.5;
+}
+
+// ----- 魔王圖片 -----
+const BOSS_PICS = {};
+for (const [key, src] of Object.entries(CONFIG.BOSS_IMAGES)) {
+    const img = new Image();
+    BOSS_PICS[key] = { img, ok: false };
+    img.onload = () => { BOSS_PICS[key].ok = true; };
+    img.src = src;
+}
+// 目前該用哪一張立繪
+function bossPic() {
+    let key = 'phase1';
+    if (G.phase === 2) {
+        if (G.route === 'play') key = 'play';
+        else key = (G.bossTired || G.mercyReady || G.bossHp <= G.bossMax * 0.15) ? 'tired' : 'rage';
+    }
+    if (BOSS_PICS[key] && BOSS_PICS[key].ok) return BOSS_PICS[key].img;
+    if (key === 'tired' && BOSS_PICS.rage.ok) return BOSS_PICS.rage.img;
+    return BOSS_PICS.phase1.ok ? BOSS_PICS.phase1.img : null;
+}
+const PLACEHOLDER = [
+    '...#........#...', '..###......###..', '..####....####..', '..############..',
+    '.##############.', '.###..####..###.', '.###..####..###.', '.######..######.',
+    '..####.##.####..', '...##########...', '....########....', '...##########...',
+    '..############.#', '..############.#', '..############.#', '..############.#',
+    '...##########.##', '...###....###...'
+];
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = randi(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+// =====================================================================
+// 遊戲狀態
+// =====================================================================
+let G;
+let playerCode = '';
+let startTime = 0;
+
+function newBattle(ultimate = false) {
+    G = {
+        state: 'text', t: 0, stateT: 0,
+        phase: 1, route: null, D: DIFFICULTY.phase1.D, DMG: DIFFICULTY.phase1.DMG, loops: 0,
+        queue: [], lastAct: null, debuffs: [], delayed: [],
+        hp: CONFIG.PLAYER_HP, bossHp: CONFIG.BOSS_HP, bossMax: CONFIG.BOSS_HP,
+        mercy: 0, mercyBroken: false, mercyReady: false,
+        turn: 0, flavor: 0,
+        menuIdx: 0, listIdx: 0, list: null,
+        items: ITEMS.map(i => ({ ...i })),
+        actsUsed: {}, quizUsed: [],
+        box: { x: 32, y: 250, w: 576, h: 140, tx: 32, ty: 250, tw: 576, th: 140 },
+        soul: { x: 320, y: 320, inv: 0, mode: 'red', vy: 0, ground: false, moved: false, kx: 0, ky: 0, lastMove: -9, face: -Math.PI / 2, stun: 0, march: null },
+        bubble: null, text: null, ents: [], attack: null, cast: null,
+        shake: 0, screenShake: 0, flash: 0, slash: 0, dmgText: null, hpBarT: 0, lb: 0, lb3Used: false, turnHurt: false, combo: null, lbAnim: null,
+        lights: 0, shards: [], bossGone: false
+    };
+    if (ultimate) {
+        // 絕難度：直接從第二階段（震怒）開始
+        Object.assign(G, {
+            ultimate: true, phase: 2, route: 'rage', D: CONFIG.ULTIMATE.D, DMG: DIFFICULTY.rage.DMG * CONFIG.ULTIMATE.DMG_MULT,
+            bossHp: CONFIG.PHASE2_HP, bossMax: CONFIG.PHASE2_HP, mercyBroken: true,
+            ultTurns: genUltTurns(), ultGauntlet: genUltGauntlet()
+        });
+        playBGM('rage', 'phase2');
+        say(['* 空氣突然變得沉重。', '* 紅貓魔王 INU 從一開始就是全力了。\n* ——絕境戰，開始。'], () => {
+            setBox(160, 120);
+            bossSay(ULT_START, bossTurn);
+        });
+        return;
+    }
+    playBGM('phase1');
+    say(['* 紅貓魔王 INU 擋住了去路！'], toMenu);
+}
+
+function setBox(w, h, cx = 320, cy = 315) {
+    const b = G.box; b.tw = w; b.th = h; b.tx = cx - w / 2; b.ty = cy - h / 2;
+}
+const wideBox = () => { const b = G.box; b.tx = 32; b.ty = 250; b.tw = 576; b.th = 140; };
+function setState(s) { G.state = s; G.stateT = 0; }
+
+// ----- 文字 -----
+function say(lines, done) {
+    wideBox();
+    setState('text');
+    G.text = { lines, i: 0, shown: 0, done };
+    G.bubble = null;
+}
+function bossSay(lines, done) {
+    setState('bossText');
+    G.bubble = { lines, i: 0, shown: 0, done };
+}
+function updateTyping(obj, isBoss, dt) {
+    const full = obj.lines[obj.i];
+    if (obj.shown < full.length) {
+        const before = Math.floor(obj.shown);
+        obj.shown = Math.min(full.length, obj.shown + dt * 32);
+        if (Math.floor(obj.shown) !== before) (isBoss ? SFX.boss : SFX.text)();
+        if (hit('ok') || hit('back')) obj.shown = full.length;
+    } else if (hit('ok')) {
+        obj.i++; obj.shown = 0;
+        if (obj.i >= obj.lines.length) {
+            if (G.bubble === obj) G.bubble = null;   // 說完話就收起對話泡泡
+            const d = obj.done; obj.done = null; if (d) d();
+        }
+    }
+}
+
+// ----- 選單 -----
+const menuItems = () => G.mercyBroken ? ['戰鬥', '行動', '道具'] : ['戰鬥', '行動', '道具', '感化'];
+function toMenu() {
+    wideBox();
+    setState('menu');
+    G.bubble = null; G.list = null; G.cast = null;
+    G.soul.mode = 'red';
+    const fl = G.phase === 1 ? FLAVOR_1 : (G.route === 'rage' ? FLAVOR_RAGE : FLAVOR_PLAY);
+    let line = fl[G.flavor % fl.length];
+    if (G.mercyReady) line = '* INU 看起來已經不想戰鬥了。';
+    else if (G.phase === 1 && G.mercy >= CONFIG.MERCY_BREAK_AT) line = '* INU 的眼神……似乎在動搖。';
+    G.text = { lines: [line], i: 0, shown: 999, done: null };
+    G.menuIdx = Math.min(G.menuIdx, menuItems().length - 1);
+}
+
+function openList(kind) {
+    let options;
+    if (kind === 'act') options = ACTS.map(a => ({ label: '* ' + a.name, act: a }));
+    if (kind === 'item') {
+        options = G.items.filter(i => i.count > 0).map(i => ({ label: `* ${i.name} ×${i.count}`, item: i }));
+        if (!options.length) { say(['* 包包裡空空如也。'], toMenu); return; }
+    }
+    if (kind === 'mercy') options = [
+        { label: '* 感化', spare: true, yellow: G.mercyReady },
+        { label: '* 逃跑', flee: true }
+    ];
+    setState('list'); G.list = { kind, options }; G.listIdx = 0;
+}
+
+function chooseOption(opt) {
+    SFX.select();
+    if (opt.act) {
+        const a = opt.act;
+        if (a.once && G.actsUsed[a.name]) { say([a.usedText], bossTurn); return; }
+        G.actsUsed[a.name] = true;
+        if (G.phase === 1) {
+            const gain = G.lastAct === a.name ? Math.ceil(a.mercy / 2) : a.mercy;
+            G.lastAct = a.name;
+            G.mercy = Math.min(99, G.mercy + gain);
+            say([a.text], bossTurn);
+        } else {
+            say([a.text2 || a.text], bossTurn);
+        }
+    } else if (opt.item) {
+        const it = opt.item;
+        it.count--;
+        if (it.hot) {   // 持續回血
+            G.hot = { per: it.hot.per, turns: it.hot.turns };
+            SFX.heal();
+            say([it.text, it.text2], bossTurn);
+            return;
+        }
+        const before = G.hp;
+        G.hp = Math.min(CONFIG.PLAYER_HP, G.hp + it.heal);
+        SFX.heal();
+        say([it.text + `\n* 回復了 ${G.hp - before} HP！`], bossTurn);
+    } else if (opt.spare) {
+        if (G.mercyReady) ending('spare');
+        else if (G.phase === 1 && G.mercy >= CONFIG.MERCY_BREAK_AT) breakMercy('play');
+        else say(['* 你試著感化 INU……\n* 但 INU 還沒有被打動。'], bossTurn);
+    } else if (opt.flee) {
+        say(['* 你想要逃跑……\n* 但魔王城的大門已經被鎖上了。'], bossTurn);
+    } else if (opt.combo) {
+        startCombo();
+    } else if (opt.lb) {
+        useLB();
+    }
+}
+
+// ----- 戰鬥：騎士連擊（先鋒劍 → 暴亂劍 → 王權劍）＋極限技 -----
+const lbLevel = () => Math.min(Math.floor((G.lb || 0) + 1e-9), G.lb3Used ? 2 : 3);
+function startFight() {
+    wideBox();
+    // 撐過絕・萬貓天動之後：一擊打倒，不用打連擊
+    if (G.phase === 2 && G.bossTired) { resolveFight(1); return; }
+    const lv = lbLevel();
+    if (lv >= 1) {   // 量表有格數：先選要打連擊還是放極限技
+        setState('list');
+        G.list = { kind: 'fight', options: [
+            { label: '* 連擊', combo: true },
+            { label: `* 極限技 LB${lv}：${CONFIG.COMBAT.LB[lv].name}`, lb: true, yellow: true }
+        ] };
+        G.listIdx = 0;
+        return;
+    }
+    startCombo();
+}
+function startCombo() {
+    wideBox();
+    setState('combo');
+    // 第一招也先轉一圈公共冷卻，讓玩家看到「轉完再按」的節奏
+    G.combo = { step: 0, gcd: 0, readyAt: 0, queued: null, total: 0, allPerfect: true, results: [], idle: 0, endAt: null, floats: [] };
+    G.blockedThisAction = false;
+}
+function comboPress(k) {
+    const C = G.combo, CB = CONFIG.COMBAT;
+    if (!C || C.endAt) return;
+    if (C.gcd < CB.GCD) {
+        if (C.queued) return;                                      // 已經按過了（狂按沒有用，以第一下為準）
+        const rem = CB.GCD - C.gcd;
+        const grade = rem <= CB.PERFECT ? '完美' : rem <= CB.GOOD ? '良好' : '太早';
+        C.queued = { k, grade };                                   // 轉完的瞬間放出
+        if (grade === '太早') comboFloat('太早', C.step, '#9ca3af');
+        return;
+    }
+    comboFire(k, '完美');                                          // 轉完後的一小段時間內補按
+}
+function comboFloat(text, slot, color) { G.combo.floats.push({ text, slot, color, t: 0 }); }
+function comboFire(k, grade) {
+    const C = G.combo, CB = CONFIG.COMBAT, sk = CB.SKILLS[C.step];
+    let mult = grade === '完美' ? 1 : grade === '良好' ? 0.85 : 0.5;
+    const right = k === C.step;
+    if (!right) mult *= 0.5;
+    if (grade !== '完美' || !right) C.allPerfect = false;
+    const dmg = Math.max(1, Math.round(sk.base * mult));
+    bossHit(dmg);
+    if (grade !== '太早' || !right) comboFloat(right ? grade : '連擊中斷', C.step, right ? (grade === '完美' ? YELLOW : '#a3e635') : RED);
+    C.results.push(right ? grade : '中斷');
+    C.total += dmg;
+    C.step++; C.gcd = 0; C.idle = 0; C.queued = null;
+    if (C.step >= 3) {
+        if (C.allPerfect) { bossHit(CB.PERFECT_BONUS, '完美連擊！'); C.total += CB.PERFECT_BONUS; }
+        C.endAt = G.t + 1.2;
+    }
+}
+// 打到 INU（會遵守「機制還沒看完前硬撐」的規則）
+function bossHit(dmg, sub = null) {
+    // 第二階段：機制還沒跑完就要打進 20% → INU 擋下這次攻擊（最多擋三次）
+    const line = G.bossMax * CONFIG.ENRAGE_AT;
+    if (G.phase === 2 && !G.bossTired && !seenAll() && G.bossHp - dmg <= line && G.bossHp > line
+        && (G.blockedThisAction || (G.blocks || 0) < CONFIG.ENRAGE_BLOCKS)) {
+        if (!G.blockedThisAction) { G.blocks = (G.blocks || 0) + 1; G.blockedThisAction = true; }
+        const left = CONFIG.ENRAGE_BLOCKS - G.blocks;
+        G.shake = 0.2; G.hpBarT = 2.0;
+        G.dmgText = { text: '格擋', t: 0, color: '#cbd5e1', sub: left > 0 ? `INU 擋下了攻擊！（還能擋 ${left} 次）` : 'INU 擋下了攻擊！……但已經擋不住了' };
+        SFX.block();
+        return;
+    }
+    const floor = bossFloor(), held = G.bossHp - dmg < floor;
+    G.bossHp = Math.max(floor, G.bossHp - dmg);
+    G.slash = 0.5; G.shake = 0.5; G.hpBarT = 2.0;
+    G.dmgText = { text: String(dmg), t: 0, color: sub ? YELLOW : RED, sub: held ? 'INU 硬撐住了！' : sub };
+    SFX.slash(); setTimeout(SFX.hurt, 120);
+}
+function updateCombo(dt) {
+    const C = G.combo, CB = CONFIG.COMBAT;
+    C.floats = C.floats.filter(f => (f.t += dt) < 0.9);
+    if (C.endAt) { if (G.t >= C.endAt) { G.combo = null; afterFight(); } return; }
+    if (C.step === 0 && C.gcd < CB.GCD * 0.5 && hit('back')) { G.combo = null; toMenu(); return; }   // 還沒出手可以返回
+    // Z／點畫面＝放下一招；1／2／3＝指定技能（按錯會連擊中斷）
+    if (hit('ok')) comboPress(C.step);
+    else ['s1', 's2', 's3'].forEach((k, i) => { if (hit(k)) comboPress(i); });
+    if (C.gcd < CB.GCD) {
+        C.gcd += dt;
+        if (C.gcd >= CB.GCD) { C.gcd = CB.GCD; C.readyAt = G.t; if (C.queued) comboFire(C.queued.k, C.queued.grade); }
+    } else if ((C.idle += dt) > CB.GRACE) {      // 轉完一圈還沒按：超時，連擊結束
+        comboFloat('超時', C.step, '#9ca3af');
+        C.results.push('超時');
+        C.endAt = G.t + 0.9;
+    }
+}
+// 極限技
+function useLB() {
+    const lv = lbLevel(), info = CONFIG.COMBAT.LB[lv];
+    if (lv < 1) { startCombo(); return; }
+    G.blockedThisAction = false;
+    G.lb -= lv;
+    if (lv === 3) {                         // LB3：完整演出，整場一次
+        G.lb3Used = true;
+        setState('lbAnim'); G.lbAnim = { t: 0, hit: false };
+        SFX.crack();
+    } else {                                // LB1／LB2：沒有演出，直接打
+        setState('fightAnim');
+        G.flash = 0.25; G.screenShake = 0.4;
+        bossHit(info.dmg, `LB${lv}　${info.name}`);
+        G.dmgText.color = YELLOW;
+    }
+}
+function updateLBAnim(dt) {
+    const A = G.lbAnim; A.t += dt;
+    if (!A.hit && A.t > 1.4) {
+        A.hit = true; G.flash = 0.6; G.screenShake = 0.8;
+        bossHit(CONFIG.COMBAT.LB[3].dmg, null);
+        G.dmgText.color = YELLOW;
+        SFX.boom();
+    }
+    if (A.t > 2.8) { G.lbAnim = null; afterFight(); }
+}
+// 每回合結束：依這回合有沒有受傷累積 LB
+function gainLB() {
+    if (G.state === 'dead') return;
+    G.lb = Math.min(3, (G.lb || 0) + (G.turnHurt ? CONFIG.COMBAT.LB_HURT : CONFIG.COMBAT.LB_PERFECT));
+    G.turnHurt = false;
+}
+// 這一個階段的機制是不是全部出現過了（絕・萬貓天動不算）
+const seenAll = () => !CONFIG.SEE_ALL_MECHANICS || G.turn >= (G.phase === 1 ? turnList().length : turnList().length - 1);
+// INU 目前最低只能被打到多少血
+function bossFloor() {
+    if (G.phase === 1) return seenAll() ? 0 : CONFIG.PHASE2_AT + 1;
+    if (G.bossTired) return 0;
+    return 1;   // 絕・萬貓天動之前不會倒下
+}
+function resolveFight(acc) {
+    setState('fightAnim');
+    // 撐過絕・萬貓天動之後：一擊打倒
+    if (G.phase === 2 && G.bossTired) {
+        const dmg = G.bossHp; G.bossHp = 0;
+        G.slash = 0.5; G.shake = 1.0; G.hpBarT = 1.6; G.flash = 0.5; G.screenShake = 0.6;
+        G.dmgText = { text: String(dmg), t: 0, color: RED, sub: '終結一擊！' };
+        SFX.slash(); setTimeout(SFX.hurt, 120); setTimeout(SFX.boom, 260);
+        return;
+    }
+    if (acc <= 0) { G.dmgText = { text: 'MISS', t: 0, color: '#aaa' }; return; }
+    const dmg = Math.round(6 + 20 * acc), floor = bossFloor();
+    const held = G.bossHp - dmg < floor;
+    G.bossHp = Math.max(floor, G.bossHp - dmg);
+    G.slash = 0.5; G.shake = 0.6; G.hpBarT = 1.6;
+    G.dmgText = { text: String(dmg), t: 0, color: RED, sub: held ? 'INU 硬撐住了！' : null };
+    SFX.slash(); setTimeout(SFX.hurt, 120);
+}
+function afterFight() {
+    G.dmgText = null;
+    if (G.phase === 1 && G.bossHp <= CONFIG.PHASE2_AT) breakMercy('rage');
+    else if (G.phase === 2 && G.bossHp <= 0) ending('fight');
+    else {
+        // 血量剩 20% 以下：下一回合直接放絕・萬貓天動
+        if (G.phase === 2 && !G.bossTired && G.bossHp <= G.bossMax * CONFIG.ENRAGE_AT) {
+            const list = turnList();
+            if (G.turn % list.length !== list.length - 1) G.turn = list.length - 1;
+        }
+        bossTurn();
+    }
+}
+
+// ----- 回合 -----
+const turnList = () => G.ultimate ? G.ultTurns : G.phase === 1 ? TURNS_1 : TURNS_2;
+const gSteps = () => G.ultimate ? G.ultGauntlet : GAUNTLET;
+function currentTurn() {
+    const list = turnList();
+    const t0 = list[G.turn % list.length];
+    // 震怒路線有專屬的攻擊（例如延遲詠唱）
+    const t = (G.route === 'rage' && t0.rage) ? { ...t0, ...t0.rage } : t0;
+    return { ...t, kinds: Array.isArray(t.attack) ? t.attack : [t.attack] };
+}
+function bossTurn() {
+    if (G.phase === 2 && G.bossTired) {   // 撐過絕・萬貓天動：INU 已經沒有力氣攻擊了
+        setBox(160, 120);
+        say([pick(['* INU 喘著氣，已經沒有力氣攻擊了。', '* INU 搖搖晃晃地站著。', '* INU 的爪子微微顫抖著。'])], toMenu);
+        return;
+    }
+    const turn = currentTurn();
+    G.curTurn = turn;
+    G.turnHurt = false;
+    setBox(...AT(turn.kinds[0]).box());
+    G.soul.mode = 'red';
+    G.soul.x = 320; G.soul.y = G.box.ty + G.box.th / 2;
+    const go = () => bossSay([turn.line], () => { G.bubble = null; startSequence(turn.kinds); });
+    G.met = G.met || {};
+    if (turn.intro && !G.met[turn.intro]) { G.met[turn.intro] = true; startCutin(turn.intro, go); }
+    else go();
+}
+// 連續技：一串攻擊依序進行
+// 連續技裡每一段會縮短，整個回合大約 14 秒
+const segDur = (kind, n) => n > 1 && AT(kind).dur() < 90 ? Math.max(AT(kind).minDur || 7, AT(kind).dur() * 1.2 / n) : undefined;
+function startSequence(kinds) {
+    G.queue = kinds.slice(1);
+    G.comboTotal = kinds.length; G.comboIdx = 1;
+    startAttack(kinds[0], segDur(kinds[0], kinds.length));
+}
+function nextSegment() {
+    const kind = G.queue.shift();
+    G.comboIdx++;
+    G.ents = []; G.cast = null; G.timeStop = null; G.vision = null;
+    setBox(...AT(kind).box());
+    G.soul.mode = 'red'; G.soul.kx = 0; G.soul.ky = 0; G.soul.march = null; G.soul.stun = 0;
+    setState('segment');
+    G.nextKind = kind;
+}
+function startAttack(kind, durOverride) {
+    setState('attack');
+    G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
+    const parts = kind.split('+'), A = ATTACKS[parts[0]];
+    const a = { kind, t: 0, events: [], dur: durOverride || A.dur(), facing: parts.some(p => ATTACKS[p].facing) };
+    a.at = (t, fn) => a.events.push({ t, fn });
+    G.attack = a; G.knight = null; G.ally = null;
+    G.soul.mode = A.mode || 'red';
+    G.soul.vy = 0; G.soul.kx = 0; G.soul.ky = 0; G.soul.march = null; G.soul.stun = 0; G.soul.face = -Math.PI / 2;
+    if (G.soul.mode === 'blue') { G.soul.y = G.box.ty + G.box.th - 12; SFX.mode(); }
+    A.start(a);
+    parts.slice(1).forEach(p => ATTACKS[p].start(a));   // 混在一起的其他機制
+    // 震怒：小貓砲騷擾（絕・萬貓天動裡不加）
+    if (RAGE() && !A.calm && !G.gauntlet) {
+        const gap = (G.ultimate ? 2.0 : 2.6) / RATE();
+        for (let t = 1.6; t < a.dur - 1; t += gap) a.at(t, () => catCannon(A.harass || 1));
+    }
+}
+function endBossTurn() {
+    gainLB();
+    if (G.hot && G.hot.turns > 0 && G.state !== 'dead') {   // 焦糖布丁：持續回血
+        const before = G.hp;
+        G.hp = Math.min(CONFIG.PLAYER_HP, G.hp + G.hot.per);
+        G.hot.turns--;
+        G.hpPop = { text: `+${G.hp - before}`, t: 0 };
+        SFX.heal();
+    }
+    G.turn++; G.flavor++;
+    G.ents = []; G.attack = null; G.cast = null; G.quizShowing = false; G.queue = []; G.debuffs = []; G.delayed = []; G.gauntlet = null;
+    G.timeStop = null; G.vision = null;
+    G.soul.mode = 'red'; G.soul.march = null; G.soul.stun = 0;
+    const list = turnList();
+    if (G.turn % list.length === 0) { G.loops++; G.D += 0.15; }   // 每循環一輪稍微變難
+    if (G.phase === 2 && G.turn === list.length && !G.mercyReady) {
+        G.bossTired = true;
+        setBox(160, 120);
+        bossSay(PHASE2_END.lines, () => {
+            G.mercyBroken = false; G.mercyReady = true; G.shards = [];
+            SFX.heal();
+            say([PHASE2_END.narr], toMenu);
+        });
+        return;
+    }
+    toMenu();
+}
+
+// ----- 第二階段過場：打碎感化按鈕 -----
+function breakMercy(route) {
+    setBox(160, 120);
+    G.soul.x = 320; G.soul.y = G.box.ty + 60;
+    G.route = route;
+    bossSay(TRANSITION[route], () => {
+        G.bubble = null;
+        setState('breaking');
+    });
+}
+function finishBreak() {
+    G.mercyBroken = true;
+    // 碎片飛散
+    const x = 32 + 3 * 148, y = 432;
+    for (let i = 0; i < 14; i++) G.shards.push({ x: x + rand(0, 132), y: y + rand(0, 38), vx: rand(-120, 120), vy: rand(-260, -80), r: rand(0, 6), w: rand(6, 16), h: rand(4, 10) });
+    G.screenShake = 0.6; G.flash = 0.4;
+    SFX.crack();
+    setTimeout(() => {
+        G.phase = 2; G.turn = 0; G.flavor = 0; G.loops = 0;
+        G.D = DIFFICULTY[G.route].D; G.DMG = DIFFICULTY[G.route].DMG;
+        G.bossHp = CONFIG.PHASE2_HP; G.bossMax = CONFIG.PHASE2_HP;
+        playBGM(G.route === 'rage' ? 'rage' : 'play', 'phase2');
+        say(['* INU 打碎了感化按鈕。'], () => {
+            setBox(160, 120);
+            bossSay(PHASE2_START[G.route], bossTurn);
+        });
+    }, 900);
+}
+
+// ----- 結局 -----
+function ending(kind) {
+    const E = ENDINGS[kind];
+    if (G.route === 'rage') G.bossTired = true;
+    setBox(160, 120);
+    G.soul.x = 320; G.soul.y = G.box.ty + 60;
+    bossSay(E.lines, () => {
+        G.bossGone = kind === 'fight';
+        say([E.narr], () => showVictory(kind));
+    });
+}
+function showVictory(kind) {
+    const E = ENDINGS[kind];
+    const secs = Math.round((Date.now() - startTime) / 1000);
+    document.getElementById('winTitle').textContent = (G.ultimate ? '絕・' : '') + E.title;
+    document.getElementById('winRoute').textContent = E.route + (G.ultimate ? '（絕境戰）' : '');
+    document.getElementById('ultBtn').textContent = G.ultimate ? '再挑戰一次絕難度' : '太簡單？來試試絕難度吧';
+    document.getElementById('winCode').textContent = playerCode;
+    const now = new Date();
+    document.getElementById('winMeta').innerHTML =
+        `挑戰時間 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒<br>完成於 ${now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+    document.getElementById('victory').classList.add('show');
+    setState('done');
+}
+
+// ----- 受傷與死亡 -----
+function damage(base) {
+    if (GOD) { G.flash = 0.06; if (G.soul.inv <= 0) G.turnHurt = true; return; }
+    if (G.soul.inv > 0 || G.state !== 'attack' && G.state !== 'quiz') return;
+    G.turnHurt = true;
+    const n = Math.round(base * G.DMG);
+    G.hp -= n;
+    G.soul.inv = 1;
+    G.flash = 0.12;
+    SFX.hurt();
+    if (G.hp <= 0) { G.hp = 0; die(); }
+}
+function die() {
+    setState('dead');
+    G.deadT = 0;
+    G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
+    G.soul.march = null; G.soul.stun = 0;
+    G.deathLines = G.phase === 1 ? DEATH_1 : DEATH_2;
+    G.deathShown = 0;
+    SFX.shatter();
+    if (bgm) bgm.pause();
+}
+function revive() {
+    if (G.phase === 1) { newBattle(); return; }
+    // 第二階段：拒絕死亡，從同一回合繼續
+    G.hp = CONFIG.PLAYER_HP;
+    G.soul.inv = 1.5;
+    if (bgm) bgm.play().catch(() => {});
+    if (G.gauntlet) { runGauntletStep(); return; }   // 絕・萬貓天動：從死掉的那一段繼續
+    const turn = G.curTurn || currentTurn();
+    setBox(...AT(turn.kinds[0]).box());
+    G.soul.mode = 'red';
+    G.soul.x = 320; G.soul.y = G.box.ty + G.box.th / 2;
+    startSequence(turn.kinds);
+}
+
+// ----- 水晶的移動（一般 / 藍色重力）-----
+function updateSoul(dt) {
+    const s = G.soul, b = G.box;
+    const ox = s.x, oy = s.y;
+    let dx = 0, dy = 0;
+    if (held.has('left')) dx -= 1;
+    if (held.has('right')) dx += 1;
+    if (held.has('up')) dy -= 1;
+    if (held.has('down')) dy += 1;
+    if (G.vision) { dx = 0; dy = 0; }                      // 未來觀測中：只能看
+    if (s.stun > 0) { s.stun -= dt; dx = 0; dy = 0; }      // 石化中
+    let spd = 150;
+    if (s.march && s.march.t > 0) {                        // 強制移動
+        dx = s.march.vx; dy = s.march.vy; spd = MARCH_SPD;
+        s.march.t -= dt;
+    }
+    if (dx || dy) s.face = Math.atan2(dy, dx);             // 面向＝最後移動的方向（凝視用）
+
+    if (s.mode === 'blue') {
+        s.x += dx * 140 * dt;
+        const floor = b.y + b.h - 9;
+        if (s.ground && hit('up') && !(s.stun > 0)) { s.vy = -330; s.ground = false; }
+        if (!held.has('up') && s.vy < -120) s.vy = -120;
+        s.vy += 900 * dt;
+        s.y += s.vy * dt;
+        if (s.y >= floor) { s.y = floor; s.vy = 0; s.ground = true; }
+        if (s.y < b.y + 9) { s.y = b.y + 9; s.vy = 0; }
+    } else {
+        s.x += dx * spd * dt; s.y += dy * spd * dt;
+    }
+    // 擊退
+    if (s.kx || s.ky) {
+        s.x += s.kx * dt; s.y += s.ky * dt;
+        s.kx *= Math.pow(0.02, dt); s.ky *= Math.pow(0.02, dt);
+        if (Math.abs(s.kx) + Math.abs(s.ky) < 20) { s.kx = 0; s.ky = 0; }
+    }
+    s.x = Math.max(b.x + 9, Math.min(b.x + b.w - 9, s.x));
+    s.y = Math.max(b.y + 9, Math.min(b.y + b.h - 9, s.y));
+    s.moved = Math.abs(s.x - ox) > 0.05 || Math.abs(s.y - oy) > 0.05;
+    if (s.moved && !(s.kx || s.ky)) s.lastMove = G.t;   // 被擊退不算自己移動
+    if (s.inv > 0) s.inv -= dt;
+}
+
+// =====================================================================
+// 碰撞
+// =====================================================================
+const SR = 4;   // 心的碰撞半徑
+const hitCircle = (x, y, r) => Math.hypot(G.soul.x - x, G.soul.y - y) < r + SR;
+function hitRect(x, y, w, h) {
+    const cx = Math.max(x, Math.min(G.soul.x, x + w)), cy = Math.max(y, Math.min(G.soul.y, y + h));
+    return Math.hypot(G.soul.x - cx, G.soul.y - cy) < SR;
+}
+function hitBeam(x0, y0, ang, width) {
+    const dx = G.soul.x - x0, dy = G.soul.y - y0;
+    const along = dx * Math.cos(ang) + dy * Math.sin(ang);
+    const perp = Math.abs(-dx * Math.sin(ang) + dy * Math.cos(ang));
+    return along > 0 && perp < width / 2 + SR;
+}
+const spawn = e => { G.ents.push(e); return e; };
+
+// =====================================================================
+// 攻擊物件
+// =====================================================================
+// 劍（藍色水晶的重力關卡）
+//   銀劍：一定要閃（跳過）／光、暗的劍：屬性跟水晶一樣就能直接穿過，不一樣就會受傷
+const SWORD_COL = { none: '#e5e7eb', light: '#fde68a', dark: '#c084fc' };
+const SWORD_GLOW = { none: null, light: 'rgba(253, 230, 138, 0.9)', dark: 'rgba(168, 85, 247, 0.9)' };
+function drawSword(x, y, w, h, tipUp, col, glow) {
+    const cx = x + w / 2, bw = Math.max(4, w * 0.45), guardY = tipUp ? y + h - 9 : y + 9;
+    ctx.save();
+    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 10; }
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    if (tipUp) {
+        ctx.moveTo(cx, y); ctx.lineTo(cx + bw / 2, y + 9); ctx.lineTo(cx + bw / 2, guardY); ctx.lineTo(cx - bw / 2, guardY); ctx.lineTo(cx - bw / 2, y + 9);
+    } else {
+        ctx.moveTo(cx, y + h); ctx.lineTo(cx + bw / 2, y + h - 9); ctx.lineTo(cx + bw / 2, guardY); ctx.lineTo(cx - bw / 2, guardY); ctx.lineTo(cx - bw / 2, y + h - 9);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // 劍身中線
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    if (tipUp) ctx.fillRect(cx - 0.6, y + 8, 1.2, guardY - y - 8); else ctx.fillRect(cx - 0.6, guardY, 1.2, y + h - 8 - guardY);
+    // 護手與劍柄
+    ctx.fillStyle = UI_GOLD; ctx.fillRect(x - 3, guardY - 2, w + 6, 4);
+    ctx.fillStyle = UI_GOLD_DARK;
+    if (tipUp) ctx.fillRect(cx - 2, guardY + 2, 4, Math.max(0, y + h - guardY - 2));
+    else ctx.fillRect(cx - 2, y, 4, Math.max(0, guardY - y - 2));
+    ctx.restore();
+}
+function Sword(x, y, w, h, vx, vy, elem = 'none', tipUp = true) {
+    return {
+        clip: true,
+        update(dt) {
+            x += vx * dt; y += vy * dt;
+            const b = G.box;
+            if (hitRect(x + w * 0.25, y, w * 0.5, h) && (elem === 'none' || elem !== G.ld)) damage(6);
+            return !(x > b.x + b.w + 80 || x + w < b.x - 80 || y > b.y + b.h + 80 || y + h < b.y - 80);
+        },
+        draw() {
+            const pass = elem !== 'none' && elem === G.ld;
+            ctx.globalAlpha = pass && !HARD() ? 0.45 : 1;   // 第一階段：可以穿過的劍會變淡
+            drawSword(x, y, w, h, tipUp, SWORD_COL[elem], SWORD_GLOW[elem]);
+            ctx.globalAlpha = 1;
+        }
+    };
+}
+
+// 放圈：在玩家腳下落下，爆炸後留下一灘持續傷害的毒池
+function Puddle(x, y, warn, life, r = 20, style = 'poison') {
+    let t = 0, boomed = false;
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!boomed && t >= warn) { boomed = true; SFX.warn(); if (hitCircle(x, y, r - 2)) damage(8); }
+            else if (boomed && t < warn + life && hitCircle(x, y, r - 6)) damage(5);
+            return t < warn + life + 0.3;
+        },
+        draw() {
+            if (!boomed) {
+                const p = t / warn;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+                ctx.fillStyle = AOE + (0.1 + 0.3 * p) + ')'; ctx.fill();
+                ctx.strokeStyle = AOE + '0.9)'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, y, r * p, 0, 7); ctx.stroke();
+            } else {
+                const k = t - warn, a = k > life ? Math.max(0, 1 - (k - life) / 0.3) : 1, fire = style === 'fire';
+                ctx.fillStyle = fire ? `rgba(234, 88, 12, ${(0.45 + 0.1 * Math.sin(G.t * 12 + x)) * a})` : `rgba(126, 34, 206, ${0.45 * a})`;
+                ctx.beginPath(); ctx.arc(x, y, r - 2 + Math.sin(G.t * 6) * 1.5, 0, 7); ctx.fill();
+                ctx.strokeStyle = fire ? `rgba(253, 186, 116, ${0.8 * a})` : `rgba(216, 180, 254, ${0.7 * a})`; ctx.lineWidth = 1.5; ctx.stroke();
+                if (fire) { ctx.fillStyle = `rgba(253, 230, 138, ${0.5 * a})`; ctx.beginPath(); ctx.arc(x, y, (r - 8) * (0.7 + 0.3 * Math.sin(G.t * 9 + y)), 0, 7); ctx.fill(); }
+            }
+        }
+    };
+}
+
+// 小貓兵的圖：先全部載入，之後每隻小貓兵隨機挑一張讀得到的
+const MINION_PICS = CONFIG.MINION_IMAGES
+    .filter(src => !CONFIG.MINION_EXCLUDE.some(w => src.toLowerCase().includes(w.toLowerCase())))
+    .map(src => { const o = { img: new Image(), ok: false }; o.img.onload = () => { o.ok = true; }; o.img.src = src; return o; });
+const pickMinion = () => { const ok = MINION_PICS.filter(p => p.ok); return ok.length ? pick(ok) : null; };
+
+// 小貓兵的樣子（連線、突進、小貓砲共用）：有圖就畫成圓形頭像，沒有就畫白色小貓
+function drawCatMinion(x, y, alpha = 1, face = null) {
+    const a0 = ctx.globalAlpha;
+    ctx.globalAlpha = a0 * alpha;
+    if (face && face.ok) {
+        const img = face.img, sz = 36, s = Math.min(sz / img.width, sz / img.height);   // 整張貼圖縮到 36px 以內
+        ctx.drawImage(img, x - img.width * s / 2, y - img.height * s / 2, img.width * s, img.height * s);
+        ctx.globalAlpha = a0;
+        return;
+    }
+    ctx.fillStyle = '#e5e7eb';
+    ctx.beginPath(); ctx.arc(x, y, 13, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 5); ctx.lineTo(x - 9, y - 19); ctx.lineTo(x - 2, y - 11); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + 12, y - 5); ctx.lineTo(x + 9, y - 19); ctx.lineTo(x + 2, y - 11); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 6, y - 3, 3, 4); ctx.fillRect(x + 3, y - 3, 3, 4);
+    ctx.globalAlpha = a0;
+}
+
+// 小貓兵突進：在場邊待機，時間到就沿著預兆直線衝過去
+function DashCat(x, y, ang, warn) {
+    let t = 0, dashed = false;
+    const face = pickMinion();
+    return {
+        update(dt) {
+            t += dt;
+            if (!dashed && t >= warn) { dashed = true; SFX.blast(); G.screenShake = Math.max(G.screenShake, 0.12); }
+            return t < warn + 0.6;
+        },
+        draw() {
+            const k = Math.max(0, t - warn), d = Math.min(900, k * 1600);
+            const px = x + Math.cos(ang) * d, py = y + Math.sin(ang) * d;
+            const alpha = dashed ? Math.max(0, 1 - k / 0.6) : Math.min(1, t / 0.2);
+            if (dashed) {
+                ctx.strokeStyle = `rgba(255,255,255,${0.5 * alpha})`; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(px, py); ctx.stroke();
+            }
+            drawCatMinion(px, py, alpha, face);
+        }
+    };
+}
+
+// 飄起來的小字（傷害數字、提示）
+function FloatText(x, y, text, color) {
+    let t = 0;
+    return {
+        update(dt) { t += dt; return t < 0.9; },
+        draw() {
+            ctx.globalAlpha = Math.max(0, 1 - t / 0.9);
+            ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = color;
+            ctx.fillText(text, x, y - t * 24);
+            ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+        }
+    };
+}
+
+// FF14 地面預兆（圓形 / 直線 / 月環），在預兆結束的瞬間判定
+function AoE(o) {
+    let t = 0, resolved = false;
+    const inside = () => {
+        if (o.shape === 'circle') return Math.hypot(G.soul.x - o.x, G.soul.y - o.y) < o.r + SR - 2;
+        if (o.shape === 'rect') return hitRect(o.x, o.y, o.w, o.h);
+        if (o.shape === 'donut') return Math.hypot(G.soul.x - o.x, G.soul.y - o.y) > o.rin - SR + 2;
+        if (o.shape === 'cone') {
+            const dx = G.soul.x - o.x, dy = G.soul.y - o.y;
+            let diff = Math.atan2(dy, dx) - o.ang;
+            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+            return Math.hypot(dx, dy) < o.r && Math.abs(diff) < o.spread / 2;
+        }
+    };
+    const path = () => {
+        ctx.beginPath();
+        if (o.shape === 'circle') ctx.arc(o.x, o.y, o.r, 0, 7);
+        if (o.shape === 'rect') ctx.rect(o.x, o.y, o.w, o.h);
+        if (o.shape === 'donut') {
+            // 外框整個填滿，中間挖一個洞（用 evenodd 規則）
+            const b = G.box;
+            ctx.rect(b.x - 5, b.y - 5, b.w + 10, b.h + 10);
+            ctx.moveTo(o.x + o.rin, o.y);
+            ctx.arc(o.x, o.y, o.rin, 0, Math.PI * 2);
+        }
+        if (o.shape === 'cone') { ctx.moveTo(o.x, o.y); ctx.arc(o.x, o.y, o.r, o.ang - o.spread / 2, o.ang + o.spread / 2); ctx.closePath(); }
+    };
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= o.warn) {
+                resolved = true;
+                SFX.boom();
+                if (!o.fake && inside()) damage(o.dmg || 10);
+            }
+            return t < o.warn + 0.35;
+        },
+        draw() {
+            const col = o.fake ? VIS : (o.frozen && G.timeStop) ? FRZ : AOE;
+            if (!resolved) {
+                if (o.show === false) return;
+                if (o.show === 'late' && t < o.warn - 0.45) return;   // 只在最後一刻閃現
+                if (o.hideAfter !== undefined && t > o.hideAfter) return;
+                const p = t / o.warn;
+                path(); ctx.fillStyle = col + (0.12 + 0.25 * p) + ')'; ctx.fill('evenodd');
+                ctx.strokeStyle = col + '0.9)'; ctx.lineWidth = 2; ctx.stroke();
+            } else {
+                if (o.fake && o.show === false) return;
+                path(); ctx.fillStyle = (o.fake ? 'rgba(221, 214, 254, ' : 'rgba(255, 220, 160, ') + 0.7 * (1 - (t - o.warn) / 0.35) + ')'; ctx.fill('evenodd');
+            }
+        }
+    };
+}
+
+// 塔：時間到時必須站在裡面
+function Tower(x, y, r, warn) {
+    let t = 0, resolved = false, ok = false;
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true;
+                ok = hitCircle(x, y, r - SR);
+                if (ok) SFX.soak(); else { SFX.boom(); damage(10); }
+            }
+            return t < warn + 0.6;
+        },
+        draw() {
+            if (!resolved) {
+                ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+                ctx.fillStyle = 'rgba(167, 139, 250, 0.18)'; ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, r - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - t / warn)); ctx.stroke();
+                ctx.fillStyle = '#e9d5ff'; ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center';
+                ctx.fillText(Math.ceil(warn - t), x, y + 5); ctx.textAlign = 'left';
+            } else {
+                ctx.fillStyle = ok ? GREEN : RED; ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center';
+                ctx.fillText(ok ? '踩塔成功' : '未踩塔！', x, y - r - 4 - (t - warn) * 20); ctx.textAlign = 'left';
+            }
+        }
+    };
+}
+
+// 直線 AoE：穿過某一點、任意角度（ray = 只往單一方向延伸）
+const VIS = 'rgba(196, 181, 253, ', FRZ = 'rgba(103, 232, 249, ';   // 未來觀測／時間停止中的預兆顏色
+function LineAoE(x, y, ang, width, warn, o = {}) {
+    let t = 0, resolved = false;
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const inside = () => {
+        const dx = G.soul.x - x, dy = G.soul.y - y;
+        if (o.ray && dx * c + dy * s < 0) return false;
+        return Math.abs(-dx * s + dy * c) < width / 2 + SR - 2;
+    };
+    const path = () => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+        ctx.beginPath(); ctx.rect(o.ray ? 0 : -900, -width / 2, o.ray ? 900 : 1800, width);
+        ctx.restore();
+    };
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true;
+                if (!o.silent) SFX.boom();
+                if (!o.fake && inside()) damage(o.dmg || 12);
+            }
+            return t < warn + 0.35;
+        },
+        draw() {
+            const col = o.fake ? VIS : (o.frozen && G.timeStop) ? FRZ : AOE;
+            if (!resolved) {
+                if (o.show === false) return;
+                if (o.show === 'late' && t < warn - 0.45) return;
+                if (o.hideAfter !== undefined && t > o.hideAfter) return;
+                const p = t / warn;
+                path(); ctx.fillStyle = col + (0.12 + 0.25 * p) + ')'; ctx.fill();
+                ctx.strokeStyle = col + '0.9)'; ctx.lineWidth = 2; ctx.stroke();
+            } else {
+                if (o.fake && o.show === false) return;
+                path();
+                ctx.fillStyle = (o.fake ? 'rgba(221, 214, 254, ' : 'rgba(255, 220, 160, ') + 0.7 * (1 - (t - warn) / 0.35) + ')';
+                ctx.fill();
+            }
+        }
+    };
+}
+
+// 旋轉激光：從中心伸出數道光束，預兆結束後開始轉動
+function RotLaser(cx, cy, n, a0, omega, warn, life, width = 22) {
+    let t = 0, ang = a0, fired = false;
+    const rays = () => Array.from({ length: n }, (_, i) => ang + i * Math.PI * 2 / n);
+    return {
+        clip: true,
+        update(dt) {
+            t += dt;
+            if (t >= warn) {
+                if (!fired) { fired = true; SFX.blast(); }
+                ang += omega * dt;
+                if (t < warn + life) rays().forEach(a => { if (hitBeam(cx, cy, a, width * 0.8)) damage(8); });
+            }
+            return t < warn + life + 0.3;
+        },
+        draw() {
+            ctx.save(); ctx.translate(cx, cy);
+            if (t < warn) {
+                const p = t / warn, sg = Math.sign(omega) || 1;
+                rays().forEach(a => {
+                    ctx.save(); ctx.rotate(a);
+                    ctx.fillStyle = AOE + (0.08 + 0.2 * p) + ')'; ctx.fillRect(0, -width / 2, 900, width);
+                    ctx.strokeStyle = AOE + '0.8)'; ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+                    ctx.strokeRect(0, -width / 2, 900, width); ctx.setLineDash([]);
+                    // 旋轉方向的箭頭
+                    const ar = 58, e = sg * 0.55;
+                    ctx.strokeStyle = YELLOW; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, ar, 0, e, sg < 0); ctx.stroke();
+                    const hx = ar * Math.cos(e), hy = ar * Math.sin(e), tx = -Math.sin(e) * sg, ty = Math.cos(e) * sg;
+                    ctx.fillStyle = YELLOW; ctx.beginPath();
+                    ctx.moveTo(hx + tx * 7, hy + ty * 7);
+                    ctx.lineTo(hx + Math.cos(e) * 5, hy + Math.sin(e) * 5);
+                    ctx.lineTo(hx - Math.cos(e) * 5, hy - Math.sin(e) * 5);
+                    ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                });
+            } else {
+                const k = t - warn, a = k > life ? Math.max(0, 1 - (k - life) / 0.3) : 1;
+                rays().forEach(r => {
+                    ctx.save(); ctx.rotate(r);
+                    ctx.fillStyle = `rgba(255, 236, 179, ${0.85 * a})`; ctx.fillRect(0, -width * 0.4, 900, width * 0.8);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${a})`; ctx.fillRect(0, -width * 0.15, 900, width * 0.3);
+                    ctx.restore();
+                });
+            }
+            ctx.fillStyle = YELLOW; ctx.beginPath(); ctx.arc(0, 0, 8, 0, 7); ctx.fill();
+            ctx.restore();
+        }
+    };
+}
+
+// 最終肉球光輪：越轉越快，中途減速逆轉一次，結尾光束整個爆亮後消失
+function FinaleLaser(cx, cy, n, a0, warn, life, flipAt, width = 20) {
+    let t = 0, ang = a0, fired = false, flipped = false;
+    const rays = () => Array.from({ length: n }, (_, i) => ang + i * Math.PI * 2 / n);
+    const speed = k => Math.min(1.0, 0.5 + 0.035 * k);                 // 角速度：慢慢加快（最多 1 rad/s）
+    const dir = k => Math.max(-1, Math.min(1, (flipAt - k) / 0.7));    // 逆轉前後 0.7 秒內平滑減速再反向
+    return {
+        clip: true,
+        update(dt) {
+            t += dt;
+            if (t < warn) return true;
+            const k = t - warn;
+            if (!fired) { fired = true; SFX.blast(); G.screenShake = 0.3; }
+            if (!flipped && k >= flipAt - 0.7) {
+                flipped = true; SFX.warn(); G.flash = 0.2; G.screenShake = 0.4;
+                spawn(FloatText(cx, cy - 30, '逆轉！', YELLOW));
+            }
+            ang += speed(k) * dir(k) * dt;
+            if (k < life) rays().forEach(a => { if (hitBeam(cx, cy, a, width * 0.8)) damage(8); });
+            if (k >= life && k - dt < life) { SFX.boom(); G.flash = 0.45; G.screenShake = 0.6; }
+            return k < life + 0.6;
+        },
+        draw() {
+            ctx.save(); ctx.translate(cx, cy);
+            if (t < warn) {
+                const p = t / warn;
+                rays().forEach(a => {
+                    ctx.save(); ctx.rotate(a);
+                    ctx.fillStyle = AOE + (0.08 + 0.22 * p) + ')'; ctx.fillRect(0, -width / 2, 900, width);
+                    ctx.strokeStyle = AOE + '0.8)'; ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+                    ctx.strokeRect(0, -width / 2, 900, width); ctx.setLineDash([]);
+                    ctx.restore();
+                });
+            } else {
+                const k = t - warn;
+                // 結尾：光束變寬、爆亮後淡出
+                const end = k > life ? Math.max(0, 1 - (k - life) / 0.6) : 1, grow = k > life ? 1 + (k - life) * 4 : 1;
+                const pulse = 0.85 + 0.15 * Math.sin(G.t * 18);
+                rays().forEach(r => {
+                    ctx.save(); ctx.rotate(r);
+                    ctx.fillStyle = `rgba(255, 236, 179, ${0.85 * end * pulse})`; ctx.fillRect(0, -width * 0.4 * grow, 900, width * 0.8 * grow);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${end})`; ctx.fillRect(0, -width * 0.15 * grow, 900, width * 0.3 * grow);
+                    ctx.restore();
+                });
+                // 逆轉前：中心閃紅光提示
+                if (Math.abs(k - flipAt) < 1.2 && Math.floor(G.t * 10) % 2) { ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(0, 0, 14, 0, 7); ctx.fill(); }
+            }
+            ctx.fillStyle = YELLOW; ctx.beginPath(); ctx.arc(0, 0, 9, 0, 7); ctx.fill();
+            ctx.restore();
+        }
+    };
+}
+
+// Exaflare（連鎖爆炎）：一格一格往箭頭方向推進的連續爆炸
+function Exaflare(x, y, dx, dy, r, warn, interval) {
+    let t = 0, k = 0;
+    const b = tbox(), cells = [];
+    for (let i = 0; i < 20; i++) {
+        const cx = x + dx * i, cy = y + dy * i;
+        if (cx < b.x - r || cx > b.x + b.w + r || cy < b.y - r || cy > b.y + b.h + r) break;
+        cells.push({ x: cx, y: cy, at: warn + i * interval });
+    }
+    const ang = Math.atan2(dy, dx);
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            while (k < cells.length && t >= cells[k].at) {
+                const c = cells[k++];
+                if (hitCircle(c.x, c.y, r - 3)) damage(12);
+                if (k % 2) SFX.boom();
+            }
+            return k < cells.length || t < cells[cells.length - 1].at + 0.35;
+        },
+        draw() {
+            // 剛爆炸的格子
+            cells.forEach(c => {
+                const e = t - c.at;
+                if (e >= 0 && e < 0.35) {
+                    ctx.fillStyle = `rgba(255, 220, 160, ${0.75 * (1 - e / 0.35)})`;
+                    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.fill();
+                }
+            });
+            if (k >= cells.length) return;
+            const c = cells[k], start = k === 0 ? 0 : cells[k - 1].at, p = Math.min(1, (t - start) / (c.at - start));
+            ctx.fillStyle = AOE + (0.15 + 0.3 * p) + ')'; ctx.strokeStyle = AOE + '0.95)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.fill(); ctx.stroke();
+            // 前進方向的箭頭（第一格畫三個）
+            ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(ang);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            const n = k === 0 ? 3 : 1;
+            for (let j = 0; j < n; j++) {
+                const ox = (j - (n - 1) / 2) * 9 - 4;
+                ctx.beginPath(); ctx.moveTo(ox + 8, 0); ctx.lineTo(ox, -7); ctx.lineTo(ox, 7); ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+            // 下一格的淡淡預告
+            if (k + 1 < cells.length) {
+                const n2 = cells[k + 1];
+                ctx.strokeStyle = AOE + '0.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(n2.x, n2.y, r, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+            }
+        }
+    };
+}
+
+// 凝視：時間到時，水晶的面向（小箭頭）不可以朝著眼睛；逆凝視則必須面向眼睛
+function GazeEye(x, y, warn, invert = false) {
+    let t = 0, resolved = false, ok = true;
+    const facingEye = () => {
+        let d = Math.atan2(y - G.soul.y, x - G.soul.x) - G.soul.face;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        return Math.abs(d) < 1.2;     // 前方約 ±70 度
+    };
+    return {
+        gaze: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true;
+                ok = invert ? facingEye() : !facingEye();
+                if (ok) SFX.soak();
+                else {
+                    SFX.boom(); G.flash = 0.25; damage(10);
+                    G.soul.stun = 1.2;     // 石化：短時間無法移動
+                    spawn(FloatText(G.soul.x, G.soul.y - 16, '石化！', '#d1d5db'));
+                }
+            }
+            return t < warn + 0.6;
+        },
+        draw() {
+            const open = resolved ? Math.max(0, 1 - (t - warn) / 0.6) : Math.min(1, t / 0.4);
+            const col = invert ? '#a855f7' : RED;
+            ctx.save(); ctx.translate(x, y);
+            if (!resolved) {
+                ctx.strokeStyle = col; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(0, 0, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - t / warn)); ctx.stroke();
+            }
+            const ew = 18, eh = 11 * open;
+            ctx.fillStyle = '#fef2f2'; ctx.strokeStyle = col; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-ew, 0);
+            ctx.quadraticCurveTo(0, -eh * 1.6, ew, 0); ctx.quadraticCurveTo(0, eh * 1.6, -ew, 0);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+            if (open > 0.25) {
+                ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, 6 * open, 0, 7); ctx.fill();
+                ctx.fillStyle = '#000'; ctx.fillRect(-1.2, -5 * open, 2.4, 10 * open);
+            }
+            if (!resolved) {
+                ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = col;
+                ctx.fillText(invert ? '看著我' : '別看我', 0, 42); ctx.textAlign = 'left';
+            }
+            ctx.restore();
+        }
+    };
+}
+
+// 距離衰減：隕石落下，離落點越近傷害越高
+function Meteor(x, y, warn, maxDmg = 30, falloff = 240) {
+    let t = 0, resolved = false;
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true; SFX.boom(); G.screenShake = 0.4;
+                const d = Math.hypot(G.soul.x - x, G.soul.y - y), dmg = Math.round(maxDmg * Math.max(0, 1 - d / falloff));
+                if (dmg >= 3) {
+                    if (G.soul.inv <= 0 && !GOD) spawn(FloatText(G.soul.x, G.soul.y - 16, '-' + Math.round(dmg * G.DMG), RED));
+                    damage(dmg);
+                } else spawn(FloatText(G.soul.x, G.soul.y - 16, '安全距離', GREEN));
+            }
+            return t < warn + 0.6;
+        },
+        draw() {
+            if (!resolved) {
+                const p = t / warn;
+                const g = ctx.createRadialGradient(x, y, 4, x, y, falloff);
+                g.addColorStop(0, AOE + (0.25 + 0.35 * p) + ')');
+                g.addColorStop(0.5, AOE + (0.08 + 0.12 * p) + ')');
+                g.addColorStop(1, AOE + '0)');
+                ctx.fillStyle = g; ctx.fillRect(x - falloff, y - falloff, falloff * 2, falloff * 2);
+                ctx.strokeStyle = AOE + '0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+                [60, 120, 180].forEach(rr => { ctx.beginPath(); ctx.arc(x, y, rr, 0, 7); ctx.stroke(); });
+                ctx.setLineDash([]);
+                ctx.strokeStyle = RED; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(x, y, 10, 0, 7);
+                ctx.moveTo(x - 16, y); ctx.lineTo(x + 16, y); ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 16); ctx.stroke();
+                // 正在落下的隕石
+                const my = y - (1 - p) * 140, mx = x + (1 - p) * 50;
+                ctx.strokeStyle = 'rgba(251, 146, 60, 0.5)'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + 20, my - 40); ctx.stroke();
+                ctx.fillStyle = '#fb923c'; ctx.beginPath(); ctx.arc(mx, my, 6 + 6 * p, 0, 7); ctx.fill();
+            } else {
+                const k = (t - warn) / 0.6;
+                ctx.fillStyle = `rgba(255, 220, 160, ${0.8 * (1 - k)})`;
+                ctx.beginPath(); ctx.arc(x, y, falloff * (0.3 + 0.7 * k), 0, 7); ctx.fill();
+            }
+        }
+    };
+}
+
+// 光與暗：場地分成兩種顏色，時間到時必須站在與自己 debuff 相同顏色的區域
+const LD = {
+    light: { label: '光之印', num: '光', color: '#ca8a04', fill: 'rgba(253, 230, 138, ', edge: '#fde68a' },
+    dark:  { label: '暗之印', num: '暗', color: '#6b21a8', fill: 'rgba(147, 51, 234, ', edge: '#c084fc' }
+};
+function setLD(kind) {
+    G.debuffs = G.debuffs.filter(d => d.kind !== 'ld');
+    G.ld = kind;
+    G.debuffs.push({ kind: 'ld', label: LD[kind].label, num: LD[kind].num, color: LD[kind].color });
+}
+function LDField(pattern, warn) {
+    // pattern：lr 左光右暗 / rl / tb 上光下暗 / bt / q1 棋盤 / q2 反棋盤
+    let t = 0, resolved = false;
+    const b = tbox();
+    const zoneAt = (x, y) => {
+        const L = x < b.x + b.w / 2, T = y < b.y + b.h / 2;
+        if (pattern === 'lr') return L ? 'light' : 'dark';
+        if (pattern === 'rl') return L ? 'dark' : 'light';
+        if (pattern === 'tb') return T ? 'light' : 'dark';
+        if (pattern === 'bt') return T ? 'dark' : 'light';
+        if (pattern === 'q1') return L === T ? 'light' : 'dark';
+        return L === T ? 'dark' : 'light';
+    };
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true;
+                if (zoneAt(G.soul.x, G.soul.y) === G.ld) SFX.soak();
+                else { SFX.boom(); damage(12); }
+            }
+            return t < warn + 0.4;
+        },
+        draw() {
+            const p = Math.min(1, t / warn), fade = resolved ? Math.max(0, 1 - (t - warn) / 0.4) : 1;
+            [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([qx, qy]) => {
+                const x = b.x + qx * b.w / 2, y = b.y + qy * b.h / 2, z = LD[zoneAt(x + 1, y + 1)];
+                ctx.fillStyle = z.fill + ((0.1 + 0.22 * p) * fade) + ')'; ctx.fillRect(x, y, b.w / 2, b.h / 2);
+                ctx.fillStyle = z.edge; ctx.globalAlpha = 0.45 * fade;
+                ctx.font = `bold 18px ${FONT}`; ctx.textAlign = 'center';
+                ctx.fillText(z.num, x + b.w / 4, y + b.h / 4 + 6); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+            });
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 * fade})`; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            if (pattern !== 'tb' && pattern !== 'bt') { ctx.moveTo(b.x + b.w / 2, b.y); ctx.lineTo(b.x + b.w / 2, b.y + b.h); }
+            if (pattern !== 'lr' && pattern !== 'rl') { ctx.moveTo(b.x, b.y + b.h / 2); ctx.lineTo(b.x + b.w, b.y + b.h / 2); }
+            ctx.stroke(); ctx.setLineDash([]);
+        }
+    };
+}
+
+// 強制移動：倒數結束時，水晶會被迫往箭頭方向走一段距離
+const MARCH_DIST = 110, MARCH_SPD = 170;
+const DIRV = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+function ForcedMarch(dir, time) {
+    const d = { kind: 'march', label: '強制移動', num: '↑→↓←'[dir], color: '#0f766e', timer: time };
+    G.debuffs.push(d);
+    let fired = false;
+    const [vx, vy] = DIRV[dir];
+    return {
+        update(dt) {
+            d.timer -= dt;
+            if (!fired && d.timer <= 0) {
+                fired = true;
+                G.debuffs = G.debuffs.filter(x => x !== d);
+                G.soul.march = { vx, vy, t: MARCH_DIST / MARCH_SPD };
+                SFX.mode();
+            }
+            if (!fired && d.timer < 1.5 && Math.floor(d.timer * 6) !== Math.floor((d.timer + dt) * 6)) SFX.warn();
+            return !fired;
+        },
+        draw() {
+            // 水晶頭上的箭頭
+            ctx.save(); ctx.translate(G.soul.x, G.soul.y - 24); ctx.rotate(Math.atan2(vy, vx));
+            ctx.fillStyle = d.timer < 1.5 ? RED : '#5eead4';
+            ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(0, -8); ctx.lineTo(0, -3); ctx.lineTo(-10, -3);
+            ctx.lineTo(-10, 3); ctx.lineTo(0, 3); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+            ctx.restore();
+            // 第一階段：預覽會被推到哪裡
+            if (!HARD()) {
+                const b = G.box;
+                const lx = Math.max(b.x + 9, Math.min(b.x + b.w - 9, G.soul.x + vx * MARCH_DIST));
+                const ly = Math.max(b.y + 9, Math.min(b.y + b.h - 9, G.soul.y + vy * MARCH_DIST));
+                ctx.strokeStyle = 'rgba(94, 234, 212, 0.5)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(G.soul.x, G.soul.y); ctx.lineTo(lx, ly); ctx.stroke(); ctx.setLineDash([]);
+                ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 7); ctx.stroke();
+            }
+        }
+    };
+}
+
+// 場地崩落：地板分成 4×3 塊，亮紅的地板會崩落，站在上面就會掉下去
+// groups：依序崩落的幾組地板（每組是地板編號 0~11）
+function TileFloor(groups, warn, gap, down = 1.0) {
+    let t = 0;
+    const b = tbox(), C = 4, R = 3, tw = b.w / C, th = b.h / R;
+    const fallAt = gi => warn + gi * gap;
+    const groupOf = new Map();
+    groups.forEach((g, gi) => g.forEach(k => groupOf.set(k, gi)));
+    const sounded = new Set();
+    const tileUnder = () => {
+        const c = Math.max(0, Math.min(C - 1, Math.floor((G.soul.x - b.x) / tw)));
+        const r = Math.max(0, Math.min(R - 1, Math.floor((G.soul.y - b.y) / th)));
+        return r * C + c;
+    };
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            groups.forEach((g, gi) => {
+                if (t >= fallAt(gi) && !sounded.has(gi)) { sounded.add(gi); SFX.crack(); G.screenShake = 0.2; }
+            });
+            const gi = groupOf.get(tileUnder());
+            if (gi !== undefined) { const k = t - fallAt(gi); if (k >= 0 && k < down) damage(14); }
+            return t < fallAt(groups.length - 1) + down + 0.25;
+        },
+        draw() {
+            for (let i = 0; i < C * R; i++) {
+                const x = b.x + (i % C) * tw, y = b.y + Math.floor(i / C) * th, gi = groupOf.get(i);
+                const k = gi === undefined ? -1 : t - fallAt(gi);
+                const fallen = gi !== undefined && k >= 0 && k < down;
+                if (!fallen) { ctx.fillStyle = 'rgba(201, 168, 106, 0.07)'; ctx.fillRect(x + 1, y + 1, tw - 2, th - 2); }
+                ctx.strokeStyle = 'rgba(201, 168, 106, 0.28)'; ctx.lineWidth = 1; ctx.strokeRect(x + 1, y + 1, tw - 2, th - 2);
+                if (gi === undefined) continue;
+                if (k < 0) {
+                    const p = t / fallAt(gi);
+                    ctx.fillStyle = AOE + (0.12 + 0.25 * p + (p > 0.7 ? 0.1 * Math.sin(t * 30) : 0)) + ')';
+                    ctx.fillRect(x + 2, y + 2, tw - 4, th - 4);
+                    // 裂痕
+                    ctx.strokeStyle = `rgba(255, 200, 150, ${0.3 + 0.5 * p})`; ctx.lineWidth = 1.5;
+                    const cx = x + tw / 2, cy = y + th / 2;
+                    ctx.beginPath();
+                    for (let j = 0; j < 4; j++) {
+                        const a = j * 1.57 + i * 0.7, l = (10 + (i * 7 + j * 5) % 12) * (0.4 + 0.6 * p);
+                        ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * l * 0.5 + 3, cy + Math.sin(a) * l * 0.5 - 2);
+                        ctx.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l);
+                    }
+                    ctx.stroke();
+                    if (groups.length > 1) {
+                        ctx.fillStyle = '#fff'; ctx.font = `bold 18px ${FONT}`; ctx.textAlign = 'center';
+                        ctx.fillText('①②③'[gi], cx, cy + 7); ctx.textAlign = 'left';
+                    }
+                } else if (fallen) {
+                    ctx.fillStyle = '#000'; ctx.fillRect(x + 1, y + 1, tw - 2, th - 2);
+                    ctx.strokeStyle = 'rgba(255, 80, 80, 0.55)'; ctx.lineWidth = 2; ctx.strokeRect(x + 3, y + 3, tw - 6, th - 6);
+                    ctx.strokeStyle = 'rgba(255, 80, 80, 0.2)'; ctx.strokeRect(x + 10, y + 9, tw - 20, th - 18);
+                } else {
+                    ctx.fillStyle = `rgba(201, 168, 106, ${0.3 * Math.max(0, 1 - (k - down) / 0.25)})`;
+                    ctx.fillRect(x + 1, y + 1, tw - 2, th - 2);
+                }
+            }
+        }
+    };
+}
+
+// 未來觀測中的「未來的自己」：示範正確走位的殘影
+function Ghost(seq, first, gap) {
+    let t = 0;
+    const c0 = boxC(), pts = [{ x: c0.x, y: c0.y, at: 0 }];
+    seq.forEach((m, i) => pts.push({ x: m.spot.x, y: m.spot.y, at: first + i * gap }));
+    const posAt = tt => {
+        for (let i = 1; i < pts.length; i++) {
+            const A = pts[i - 1], B = pts[i];
+            if (tt <= B.at) {
+                const start = A.at + 0.15, end = B.at - 0.35;     // 上一段炸完才出發，提早站好
+                const p = Math.max(0, Math.min(1, (tt - start) / Math.max(0.1, end - start)));
+                const e = p * p * (3 - 2 * p);
+                return { x: A.x + (B.x - A.x) * e, y: A.y + (B.y - A.y) * e };
+            }
+        }
+        return pts[pts.length - 1];
+    };
+    const trail = [];
+    return {
+        update(dt) {
+            t += dt;
+            trail.push(posAt(t)); if (trail.length > 10) trail.shift();
+            return !!G.vision;
+        },
+        draw() {
+            trail.forEach((p, i) => { ctx.globalAlpha = 0.05 * i; drawHeart(p.x, p.y, 'vision'); });
+            const p = posAt(t);
+            ctx.globalAlpha = 0.75 + 0.2 * Math.sin(G.t * 8);
+            drawHeart(p.x, p.y, 'vision', 1.15);
+            ctx.globalAlpha = 1;
+        }
+    };
+}
+
+// 光暗屬性反轉：times = 這次攻擊中反轉的時間點；debuff 上會顯示倒數
+const flipLD = () => {
+    if (!G.ld) return;
+    setLD(G.ld === 'light' ? 'dark' : 'light'); SFX.mode();
+    spawn(FloatText(G.soul.x, G.soul.y - 24, '屬性反轉！', YELLOW));
+};
+function scheduleFlips(a, times) {
+    if (!times.length) return;
+    a.at(0.01, () => spawn(LDTimer(times)));
+    times.forEach(ft => a.at(ft, flipLD));
+}
+function LDTimer(times) {
+    return {
+        update() {
+            const now = G.attack ? G.attack.t : 0, next = times.find(x => x > now + 0.001);
+            const d = G.debuffs.find(x => x.kind === 'ld');
+            if (d) { d.timer = next === undefined ? undefined : next - now; d.label = LD[G.ld].label + (next === undefined ? '' : '・反轉'); }
+            return next !== undefined;
+        },
+        draw() {}
+    };
+}
+
+// 小貓砲：場邊的小貓兵架起砲管，沿著預兆直線開砲（震怒的騷擾）
+function CannonCat(x, y, ang, warn) {
+    let t = 0, fired = false;
+    const face = pickMinion();
+    return {
+        update(dt) {
+            t += dt;
+            if (!fired && t >= warn) { fired = true; SFX.blast(); G.screenShake = Math.max(G.screenShake, 0.1); }
+            return t < warn + 0.5;
+        },
+        draw() {
+            const alpha = fired ? Math.max(0, 1 - (t - warn) / 0.5) : Math.min(1, t / 0.2);
+            if (fired) {
+                const k = Math.min(1, (t - warn) * 6), L = 900 * k;
+                ctx.strokeStyle = `rgba(255, 240, 200, ${alpha})`; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ang) * L, y + Math.sin(ang) * L); ctx.stroke();
+            }
+            ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#6b7280'; ctx.fillRect(6, -4, 18, 8);
+            ctx.fillStyle = '#374151'; ctx.fillRect(22, -5, 4, 10);
+            if (fired && t - warn < 0.12) { ctx.fillStyle = YELLOW; ctx.beginPath(); ctx.arc(30, 0, 7, 0, 7); ctx.fill(); }
+            ctx.restore(); ctx.globalAlpha = 1;
+            drawCatMinion(x, y, alpha, face);
+        }
+    };
+}
+function catCannon(n = 1, warn = WARN(1.1)) {
+    const b = tbox(), blue = G.soul.mode === 'blue';
+    for (let i = 0; i < n; i++) {
+        let p, ang;
+        if (blue) {   // 重力中：只從正上方或正下方直直開砲
+            const x = i === 0 ? Math.max(b.x + 15, Math.min(b.x + b.w - 15, G.soul.x)) : rand(b.x + 20, b.x + b.w - 20), top = Math.random() < 0.6;
+            p = { x, y: top ? b.y - 40 : b.y + b.h + 30 }; ang = top ? Math.PI / 2 : -Math.PI / 2;
+        } else {
+            p = edgeSpot(40);
+            const aim = i === 0 ? { x: G.soul.x, y: G.soul.y } : inBox(15);
+            ang = Math.atan2(aim.y - p.y, aim.x - p.x);
+        }
+        spawn(LineAoE(p.x, p.y, ang, 20, warn, { ray: true, dmg: 10, silent: true }));
+        spawn(CannonCat(p.x, p.y, ang, warn));
+    }
+}
+
+// 烈焰足跡：頭上的火焰標記（倒數結束前，會一直在腳下留下地火）
+function FireMark(dur) {
+    let t = 0;
+    return {
+        update(dt) { t += dt; return t < dur; },
+        draw() {
+            const x = G.soul.x, y = G.soul.y - 26;
+            ctx.fillStyle = '#fb923c';
+            ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.quadraticCurveTo(x + 9, y, x, y + 7); ctx.quadraticCurveTo(x - 9, y, x, y - 10); ctx.fill();
+            ctx.fillStyle = '#fde68a';
+            ctx.beginPath(); ctx.moveTo(x, y - 3); ctx.quadraticCurveTo(x + 4, y + 2, x, y + 6); ctx.quadraticCurveTo(x - 4, y + 2, x, y - 3); ctx.fill();
+            ctx.strokeStyle = 'rgba(251, 146, 60, 0.8)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(G.soul.x, G.soul.y, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - t / dur)); ctx.stroke();
+        }
+    };
+}
+
+// =====================================================================
+// 守門騎士（另一關的關主）：第二階段中途加入，和 INU 一起打雙 BOSS 合體技
+// =====================================================================
+const KNIGHT_PIC = { img: new Image(), ok: false };
+KNIGHT_PIC.img.onload = () => { KNIGHT_PIC.ok = true; };
+KNIGHT_PIC.img.src = CONFIG.KNIGHT.IMAGE;
+// 騎士的樣子：有圖就用圖，沒有就畫一個暫代的剪影（h = 高度）
+function drawKnightSprite(x, y, h = 40, alpha = 1) {
+    const a0 = ctx.globalAlpha;
+    ctx.globalAlpha = a0 * alpha;
+    if (KNIGHT_PIC.ok) {
+        const img = KNIGHT_PIC.img, w = img.width * h / img.height;
+        ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+    } else {
+        const s = h / 40;
+        ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+        ctx.fillStyle = '#7f1d1d';
+        ctx.beginPath(); ctx.moveTo(-9, -4); ctx.lineTo(9, -4); ctx.lineTo(12, 18); ctx.lineTo(-12, 18); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#94a3b8'; ctx.fillRect(-7, -4, 14, 16);
+        ctx.beginPath(); ctx.arc(0, -11, 8, 0, 7); ctx.fill();
+        ctx.fillStyle = RED; ctx.fillRect(-5, -12, 10, 2.5);
+        ctx.fillStyle = '#475569';
+        ctx.beginPath(); ctx.moveTo(-16, -2); ctx.lineTo(-4, -2); ctx.lineTo(-4, 8); ctx.lineTo(-10, 15); ctx.lineTo(-16, 8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = UI_GOLD; ctx.fillRect(-11, 0, 2, 11); ctx.fillRect(-14, 3, 8, 2);
+        ctx.restore();
+    }
+    ctx.globalAlpha = a0;
+}
+// 騎士本體：會移動、有自己的詠唱條，劍指的方向就是他的面向
+function EnemyKnight() {
+    const b = tbox();
+    G.knight = { x: b.x + b.w + 70, y: b.y + b.h / 2, tx: b.x + b.w - 30, ty: b.y + b.h / 2, face: Math.PI, cast: null, dash: false };
+    return {
+        update(dt) {
+            const k = G.knight, dx = k.tx - k.x, dy = k.ty - k.y, d = Math.hypot(dx, dy), mv = Math.min(d, (k.dash ? 1100 : 280) * dt);
+            if (d > 0.5) { k.x += dx / d * mv; k.y += dy / d * mv; } else k.dash = false;
+            if (k.cast) { k.cast.t += dt; if (k.cast.t > k.cast.dur + 0.3) k.cast = null; }
+            return true;
+        },
+        draw() {
+            const k = G.knight;
+            ctx.strokeStyle = 'rgba(255, 42, 85, 0.7)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(k.x, k.y + 17, 17, 5, 0, 0, 7); ctx.stroke();
+            // 劍：指向騎士的面向
+            ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.face);
+            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(38, 0); ctx.stroke();
+            ctx.fillStyle = '#e5e7eb'; ctx.beginPath(); ctx.moveTo(44, 0); ctx.lineTo(37, -3); ctx.lineTo(37, 3); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = UI_GOLD; ctx.fillRect(10, -6, 3, 12);
+            ctx.restore();
+            drawKnightSprite(k.x, k.y, 38);
+            // 名字＋騎士自己的詠唱條（在框上緣時改畫在下面，避免擋到 INU 的詠唱條）
+            const ty = k.y < G.box.y + 60 ? k.y + 36 : k.y - 30;
+            ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#fca5a5';
+            ctx.fillText(k.cast ? `${CONFIG.KNIGHT.NAME}・${k.cast.name}` : CONFIG.KNIGHT.NAME, k.x, ty);
+            if (k.cast) {
+                ctx.fillStyle = '#333'; ctx.fillRect(k.x - 32, ty + 3, 64, 4);
+                ctx.fillStyle = RED; ctx.fillRect(k.x - 32, ty + 3, 64 * Math.min(1, k.cast.t / k.cast.dur), 4);
+            }
+            ctx.textAlign = 'left';
+        }
+    };
+}
+// 合體技期間：INU 往左移，倒頭從右邊滑進來，兩個並排站在上面（G.duoK：0 = 不在、1 = 完全站好）
+const DUO_INU_X = 240, DUO_KNIGHT_X = 402;
+const bossShift = () => (DUO_INU_X - 320) * (G.duoK || 0);
+function drawKnightStage() {
+    const k = G.duoK || 0;
+    if (CONFIG.KNIGHT.STAGE !== 'top' || k < 0.01 || G.bossGone) return;
+    const cx = DUO_KNIGHT_X + (1 - k) * 260, maxH = 195, top = 22, bob = Math.sin(G.t * 2 + 1.3) * 3;
+    ctx.save(); ctx.globalAlpha = k;
+    if (G.knight && G.knight.cast) {   // 詠唱中：身後發出紅光
+        const gl = ctx.createRadialGradient(cx, top + maxH / 2, 10, cx, top + maxH / 2, 120);
+        gl.addColorStop(0, 'rgba(255, 42, 85, 0.3)'); gl.addColorStop(1, 'rgba(255, 42, 85, 0)');
+        ctx.fillStyle = gl; ctx.fillRect(cx - 130, 0, 260, 240);
+    }
+    if (KNIGHT_PIC.ok) {
+        const img = KNIGHT_PIC.img;
+        let h = maxH, w = img.width * h / img.height;
+        if (w > 190) { w = 190; h = img.height * w / img.width; }      // 太寬的圖會縮小，避免擋到 INU
+        ctx.imageSmoothingEnabled = img.height > 300;                  // 像素圖保持銳利
+        ctx.drawImage(img, cx - w / 2, top + maxH - h + bob, w, h);
+        ctx.imageSmoothingEnabled = true;
+    } else drawKnightSprite(cx, top + maxH / 2 + bob, maxH * 0.8);
+    ctx.restore();
+}
+const knightTo = (x, y, face) => { const k = G.knight; if (!k) return; k.tx = x; k.ty = y; if (face !== undefined) k.face = face; };
+const kcast = (name, dur) => { if (G.knight) { G.knight.cast = { name, t: 0, dur }; SFX.cast(); } };
+// 騎士突進：先用連線鎖定玩家，鎖定後朝那個方向直線衝過去
+function KnightCharge(lockAt, hitDelay) {
+    let t = 0, locked = false, dashed = false, end = null;
+    return {
+        update(dt) {
+            t += dt;
+            const k = G.knight;
+            if (!locked && t >= lockAt) {
+                locked = true; SFX.warn();
+                const ang = Math.atan2(G.soul.y - k.y, G.soul.x - k.x), b = G.box;
+                k.face = ang;
+                spawn(LineAoE(k.x, k.y, ang, 36, hitDelay, { ray: true, dmg: 14 }));
+                end = { x: Math.max(b.x + 20, Math.min(b.x + b.w - 20, G.soul.x + Math.cos(ang) * 40)),
+                        y: Math.max(b.y + 20, Math.min(b.y + b.h - 20, G.soul.y + Math.sin(ang) * 40)) };
+            }
+            if (locked && !dashed && t >= lockAt + hitDelay) { dashed = true; k.dash = true; k.tx = end.x; k.ty = end.y; }
+            return !dashed;
+        },
+        draw() {
+            if (locked) return;
+            const k = G.knight;
+            ctx.strokeStyle = `rgba(255, 80, 80, ${0.5 + 0.4 * Math.sin(t * 20)})`; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(G.soul.x, G.soul.y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.strokeStyle = RED; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(G.soul.x, G.soul.y, 13 - (t * 8) % 4, 0, 7); ctx.stroke();
+        }
+    };
+}
+
+// =====================================================================
+// 援軍（友軍 NPC）與雙人機制
+// =====================================================================
+const ALLY_PIC = { img: new Image(), ok: false };
+ALLY_PIC.img.onload = () => { ALLY_PIC.ok = true; };
+ALLY_PIC.img.src = CONFIG.ALLY.IMAGE;
+// 援軍的樣子：有圖就用圖，沒有就畫一個暫代的剪影（h = 高度）
+function drawAllySprite(x, y, h = 40, alpha = 1) {
+    const a0 = ctx.globalAlpha;
+    ctx.globalAlpha = a0 * alpha;
+    if (ALLY_PIC.ok) {
+        const img = ALLY_PIC.img, w = img.width * h / img.height;
+        ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+    } else {
+        const s = h / 40;
+        ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+        ctx.fillStyle = '#1e3a8a';
+        ctx.beginPath(); ctx.moveTo(-9, -4); ctx.lineTo(9, -4); ctx.lineTo(12, 18); ctx.lineTo(-12, 18); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#cbd5e1'; ctx.fillRect(-7, -4, 14, 16);
+        ctx.beginPath(); ctx.arc(0, -11, 8, 0, 7); ctx.fill();
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(-5, -12, 10, 2.5);
+        ctx.fillStyle = '#e5e7eb';
+        ctx.beginPath(); ctx.moveTo(4, -2); ctx.lineTo(16, -2); ctx.lineTo(16, 8); ctx.lineTo(10, 15); ctx.lineTo(4, 8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = UI_GOLD; ctx.fillRect(9, 0, 2, 11); ctx.fillRect(6, 3, 8, 2);
+        ctx.restore();
+    }
+    ctx.globalAlpha = a0;
+}
+function AllyNPC() {
+    const c = boxC();
+    G.ally = { x: c.x - 60, y: c.y + 20, tx: c.x - 60, ty: c.y + 20, shield: false };
+    return {
+        update(dt) {
+            const k = G.ally, dx = k.tx - k.x, dy = k.ty - k.y, d = Math.hypot(dx, dy), mv = Math.min(d, 140 * dt);
+            if (d > 0.5) { k.x += dx / d * mv; k.y += dy / d * mv; }
+            return true;
+        },
+        draw() {
+            const k = G.ally;
+            if (k.shield) {
+                ctx.strokeStyle = `rgba(253, 230, 138, ${0.6 + 0.3 * Math.sin(G.t * 10)})`; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(k.x, k.y, 22, Math.PI + 0.5, -0.5); ctx.stroke();
+            }
+            drawAllySprite(k.x, k.y, 36);
+            ctx.font = `bold 11px ${FONT}`; ctx.fillStyle = '#93c5fd'; ctx.textAlign = 'center';
+            ctx.fillText(CONFIG.ALLY.NAME, k.x, k.y - 22); ctx.textAlign = 'left';
+        }
+    };
+}
+const allyGo = (x, y) => { if (G.ally) { G.ally.tx = x; G.ally.ty = y; } };
+
+// 雙人分攤：時間到時要站進援軍的圈裡，一起分擔傷害
+function StackMark(warn) {
+    let t = 0, resolved = false;
+    const R = 34;
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true;
+                const k = G.ally;
+                if (Math.hypot(G.soul.x - k.x, G.soul.y - k.y) < R + SR - 2) { SFX.soak(); spawn(FloatText(k.x, k.y - 30, '分攤成功', GREEN)); }
+                else { SFX.boom(); damage(18); spawn(FloatText(G.soul.x, G.soul.y - 16, '沒有分攤！', RED)); }
+            }
+            return t < warn + 0.4;
+        },
+        draw() {
+            const k = G.ally;
+            if (!k) return;
+            if (!resolved) {
+                const p = t / warn;
+                ctx.fillStyle = `rgba(250, 204, 21, ${0.12 + 0.2 * p})`; ctx.beginPath(); ctx.arc(k.x, k.y, R, 0, 7); ctx.fill();
+                ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#facc15';
+                for (let i = 0; i < 4; i++) {
+                    const a = i * Math.PI / 2 + Math.PI / 4, r0 = R + 12 - (t * 24) % 10;
+                    ctx.save(); ctx.translate(k.x + Math.cos(a) * r0, k.y + Math.sin(a) * r0); ctx.rotate(a + Math.PI);
+                    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-3, -5); ctx.lineTo(-3, 5); ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                }
+            } else {
+                ctx.fillStyle = `rgba(255, 220, 160, ${0.7 * (1 - (t - warn) / 0.4)})`; ctx.beginPath(); ctx.arc(k.x, k.y, R, 0, 7); ctx.fill();
+            }
+        }
+    };
+}
+// 武裝戍衛：魔王打全場，只有援軍盾牌後方的扇形是安全的
+function ShieldCover(warn) {
+    let t = 0, resolved = false;
+    const R = 175, spread = 1.3, ang = Math.PI / 2;     // 魔王在上方 → 盾的後方是下方
+    const inCover = () => {
+        const k = G.ally, dx = G.soul.x - k.x, dy = G.soul.y - k.y, d = Math.hypot(dx, dy);
+        if (d < 8) return true;
+        let diff = Math.atan2(dy, dx) - ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        return d < R && Math.abs(diff) < spread / 2;
+    };
+    const path = (k, b) => {
+        ctx.beginPath(); ctx.rect(b.x - 5, b.y - 5, b.w + 10, b.h + 10);
+        ctx.moveTo(k.x, k.y); ctx.arc(k.x, k.y, R, ang - spread / 2, ang + spread / 2); ctx.closePath();
+    };
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (G.ally) G.ally.shield = !resolved;
+            if (!resolved && t >= warn) {
+                resolved = true; G.screenShake = 0.5; SFX.boom();
+                if (inCover()) { SFX.soak(); spawn(FloatText(G.soul.x, G.soul.y - 16, '被盾保護了', GREEN)); }
+                else { damage(22); spawn(FloatText(G.soul.x, G.soul.y - 16, '要躲在盾後面！', RED)); }
+            }
+            return t < warn + 0.5;
+        },
+        draw() {
+            const k = G.ally, b = G.box;
+            if (!k) return;
+            if (!resolved) {
+                const p = t / warn;
+                path(k, b); ctx.fillStyle = AOE + (0.1 + 0.25 * p) + ')'; ctx.fill('evenodd');
+                ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.arc(k.x, k.y, R, ang - spread / 2, ang + spread / 2); ctx.closePath();
+                ctx.fillStyle = `rgba(253, 230, 138, ${0.12 + 0.12 * p})`; ctx.fill();
+                ctx.strokeStyle = 'rgba(253, 230, 138, 0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+            } else {
+                path(k, b); ctx.fillStyle = `rgba(255, 220, 160, ${0.6 * (1 - (t - warn) / 0.5)})`; ctx.fill('evenodd');
+            }
+        }
+    };
+}
+// 雙人連線：時間到時，跟援軍之間的距離要夠遠（拉開）或夠近（靠近）
+function PartnerTether(far, warn) {
+    let t = 0, resolved = false, ok = true;
+    const FAR = 130, NEAR = 50;
+    const sat = () => { const k = G.ally, d = Math.hypot(G.soul.x - k.x, G.soul.y - k.y); return far ? d > FAR : d < NEAR; };
+    return {
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= warn) {
+                resolved = true; ok = sat();
+                if (ok) SFX.soak(); else { SFX.boom(); G.flash = 0.25; damage(16); }
+            }
+            return t < warn + 0.6;
+        },
+        draw() {
+            const k = G.ally;
+            if (!k) return;
+            ctx.globalAlpha = resolved ? Math.max(0, 1 - (t - warn) / 0.6) : 1;
+            const good = resolved ? ok : sat();
+            ctx.strokeStyle = good ? GREEN : RED; ctx.lineWidth = resolved ? 4 : 2;
+            if (!resolved) ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(G.soul.x, G.soul.y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.font = `bold 12px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = far ? '#93c5fd' : '#fca5a5';
+            ctx.fillText(far ? '拉開！' : '靠近！', (k.x + G.soul.x) / 2, (k.y + G.soul.y) / 2 - 8);
+            ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+        }
+    };
+}
+
+// 中途演出：守門騎士（敵）／援軍（友）的立繪切入
+function startCutin(who, done) {
+    setState('cutin');
+    const cfg = who === 'ally' ? CONFIG.ALLY : CONFIG.KNIGHT;
+    G.cutin = { t: 0, who, lines: cfg.INTRO, i: 0, shown: 0, done };
+    G.flash = 0.4; SFX.crack();
+}
+function drawCutin() {
+    const C = G.cutin, k = Math.min(1, C.t / 0.5), e = 1 - Math.pow(1 - k, 3);
+    const ally = C.who === 'ally', cfg = ally ? CONFIG.ALLY : CONFIG.KNIGHT, pic = ally ? ALLY_PIC : KNIGHT_PIC;
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.78 * k})`; ctx.fillRect(-20, -20, W + 40, H + 40);
+    ctx.save(); ctx.translate(320, 190); ctx.rotate(-0.12);
+    ctx.fillStyle = ally ? 'rgba(201, 168, 106, 0.2)' : 'rgba(255, 42, 85, 0.18)'; ctx.fillRect(-420 - (1 - e) * 700, -80, 840, 160);
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.25)'; ctx.fillRect(-420 + (1 - e) * 700, 70, 840, 6);
+    ctx.restore();
+    // 立繪：從左邊滑進來
+    const ph = 300, cx = -150 + e * 330;
+    if (pic.ok) {
+        const img = pic.img, pw = img.width * ph / img.height;
+        ctx.drawImage(img, cx - pw / 2, 345 - ph, pw, ph);
+    } else (ally ? drawAllySprite : drawKnightSprite)(cx, 200, 240);
+    ctx.globalAlpha = k; ctx.textAlign = 'right';
+    ctx.font = `900 34px ${FONT}`; ctx.fillStyle = ally ? UI_GOLD : RED; ctx.fillText(cfg.TITLE, 610, 140);
+    ctx.font = `bold 18px ${FONT}`; ctx.fillStyle = UI_TEXT; ctx.fillText(cfg.NAME, 610, 172);
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    if (C.t > 0.6 && C.lines[C.i] !== undefined) {
+        const x = 40, y = 350, w = 560, h = 100, full = C.lines[C.i];
+        ctx.fillStyle = UI_PANEL; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+        ctx.strokeStyle = UI_GOLD; ctx.lineWidth = 2; ctx.stroke();
+        ctx.font = `bold 14px ${FONT}`; ctx.fillStyle = ally ? '#93c5fd' : '#fca5a5'; ctx.fillText(cfg.NAME, x + 18, y + 24);
+        ctx.font = `17px ${FONT}`; ctx.fillStyle = '#fff';
+        wrapText(full.slice(0, Math.floor(C.shown)), w - 40).forEach((l, i) => ctx.fillText(l, x + 18, y + 52 + i * 26));
+        if (C.shown >= full.length && Math.floor(G.t * 2) % 2) {
+            ctx.font = `12px ${FONT}`; ctx.fillStyle = '#888'; ctx.textAlign = 'right';
+            ctx.fillText('▼ Z', x + w - 12, y + h - 10); ctx.textAlign = 'left';
+        }
+    }
+}
+
+// 擊退：從來源點往外推
+const KNOCK_DECAY = Math.log(1 / 0.02);   // 擊退距離 = 力道 / KNOCK_DECAY
+function Knock(x, y, warn, power, preview = false) {
+    let t = 0, done = false;
+    return {
+        under: true,
+        update(dt) {
+            t += dt;
+            if (!done && t >= warn) {
+                done = true;
+                let dx = G.soul.x - x, dy = G.soul.y - y, d = Math.hypot(dx, dy);
+                if (d < 1) { dx = 1; dy = 0; d = 1; }
+                G.soul.kx = dx / d * power; G.soul.ky = dy / d * power;
+                SFX.boom(); G.screenShake = 0.25;
+            }
+            return t < warn + 0.4;
+        },
+        draw() {
+            if (done) return;
+            if (preview) {   // 預覽落點（第一階段與遊戲模式才有）
+                let dx = G.soul.x - x, dy = G.soul.y - y, d = Math.hypot(dx, dy) || 1;
+                const dist = power / KNOCK_DECAY, b = G.box;
+                const lx = Math.max(b.x + 9, Math.min(b.x + b.w - 9, G.soul.x + dx / d * dist));
+                const ly = Math.max(b.y + 9, Math.min(b.y + b.h - 9, G.soul.y + dy / d * dist));
+                ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(G.soul.x, G.soul.y); ctx.lineTo(lx, ly); ctx.stroke(); ctx.setLineDash([]);
+                ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 7); ctx.stroke();
+            }
+            ctx.strokeStyle = AOE + '0.9)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.stroke();
+            for (let i = 0; i < 8; i++) {
+                const a = i * Math.PI / 4 + t;
+                const r0 = 16 + (t * 40) % 20;
+                ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+                ctx.lineTo(x + Math.cos(a) * (r0 + 10), y + Math.sin(a) * (r0 + 10)); ctx.stroke();
+            }
+        }
+    };
+}
+
+// 牆邊的尖刺（被擊退／強制移動撞上就受傷）；armAt 之前只是預告
+function SpikeWall(side, life, armAt = 0) {
+    let t = 0;
+    return {
+        update(dt) {
+            t += dt;
+            const b = G.box;
+            if (t >= armAt) {
+                if (side === 'left' && G.soul.x < b.x + 16) damage(8);
+                if (side === 'right' && G.soul.x > b.x + b.w - 16) damage(8);
+                if (side === 'top' && G.soul.y < b.y + 16) damage(8);
+                if (side === 'bottom' && G.soul.y > b.y + b.h - 16) damage(8);
+            }
+            return t < life;
+        },
+        draw() {
+            const b = G.box;
+            ctx.fillStyle = t >= armAt ? '#fff' : `rgba(255, 255, 255, ${0.3 + 0.2 * Math.sin(t * 10)})`;
+            if (side === 'left' || side === 'right') {
+                for (let y = b.y + 6; y < b.y + b.h - 6; y += 12) {
+                    ctx.beginPath();
+                    if (side === 'left') { ctx.moveTo(b.x + 2, y - 5); ctx.lineTo(b.x + 12, y); ctx.lineTo(b.x + 2, y + 5); }
+                    else { ctx.moveTo(b.x + b.w - 2, y - 5); ctx.lineTo(b.x + b.w - 12, y); ctx.lineTo(b.x + b.w - 2, y + 5); }
+                    ctx.fill();
+                }
+            } else {
+                for (let x = b.x + 6; x < b.x + b.w - 6; x += 12) {
+                    ctx.beginPath();
+                    if (side === 'top') { ctx.moveTo(x - 5, b.y + 2); ctx.lineTo(x, b.y + 12); ctx.lineTo(x + 5, b.y + 2); }
+                    else { ctx.moveTo(x - 5, b.y + b.h - 2); ctx.lineTo(x, b.y + b.h - 12); ctx.lineTo(x + 5, b.y + b.h - 2); }
+                    ctx.fill();
+                }
+            }
+        }
+    };
+}
+
+// 數字標記圈（Limit Cut 風格）：只有輪到自己號碼的圈要站進去，其他的要避開
+function NumberCircle(x, y, r, num, resolveAt, myDebuff, hideAt) {
+    let t = 0, resolved = false, ok = true;
+    const mine = !!myDebuff;
+    return {
+        clip: true, under: true,
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= resolveAt) {
+                resolved = true;
+                const inside = hitCircle(x, y, r - SR);
+                ok = mine ? inside : !inside;
+                if (ok) SFX.soak(); else { SFX.boom(); damage(12); }
+                if (mine && G.debuffs) G.debuffs = G.debuffs.filter(d => d !== myDebuff);   // 只移除自己這一輪的號碼
+            }
+            return t < resolveAt + 0.5;
+        },
+        draw() {
+            if (!resolved) {
+                ctx.strokeStyle = AOE + '0.9)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+                ctx.fillStyle = AOE + (0.1 + 0.3 * (t / resolveAt)) + ')'; ctx.fill();
+                if (hideAt === undefined || t < hideAt) {
+                    ctx.fillStyle = '#fff'; ctx.font = `bold 22px Georgia, 'Times New Roman', serif`; ctx.textAlign = 'center';
+                    ctx.fillText(num, x, y + 8); ctx.textAlign = 'left';
+                }
+            } else {
+                ctx.fillStyle = `rgba(255, 220, 160, ${0.7 * (1 - (t - resolveAt) / 0.5)})`;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+            }
+        }
+    };
+}
+
+// 加速度炸彈：倒數結束時不可以在移動
+function AccelBomb(time) {
+    const d = { kind: 'accel', label: '加速度炸彈', num: '!', color: '#b45309', timer: time };
+    G.debuffs.push(d);
+    return {
+        update(dt) {
+            d.timer -= dt;
+            if (d.timer <= 0) {
+                G.debuffs = G.debuffs.filter(x => x !== d);
+                if (G.t - G.soul.lastMove < 0.12) { SFX.boom(); G.flash = 0.3; damage(15); }
+                else SFX.soak();
+                return false;
+            }
+            if (d.timer < 1.5 && Math.floor(d.timer * 6) !== Math.floor((d.timer + dt) * 6)) SFX.warn();
+            return true;
+        },
+        draw() {
+            // 心的頭上顯示炸彈倒數
+            ctx.fillStyle = d.timer < 1.5 ? RED : YELLOW; ctx.font = `bold 12px ${FONT}`; ctx.textAlign = 'center';
+            ctx.fillText('💣' + Math.ceil(d.timer), G.soul.x, G.soul.y - 14); ctx.textAlign = 'left';
+        }
+    };
+}
+
+// 引導扇形：先鎖定玩家的方向，接著扇形在鎖定的方向爆炸
+function BaitCone(ox, oy, baitT, warn, spread) {
+    let t = 0, locked = false;
+    return {
+        under: true,
+        update(dt) {
+            t += dt;
+            if (!locked && t >= baitT) {
+                locked = true;
+                const ang = Math.atan2(G.soul.y - oy, G.soul.x - ox);
+                spawn(AoE({ shape: 'cone', x: ox, y: oy, ang, spread, r: 420, warn, dmg: 12 }));
+                SFX.warn();
+            }
+            return !locked;
+        },
+        draw() {
+            // 引導中：從魔王拉一條線到玩家身上
+            ctx.strokeStyle = `rgba(255, 80, 80, ${0.5 + 0.4 * Math.sin(t * 20)})`; ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(G.soul.x, G.soul.y); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = RED; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(G.soul.x, G.soul.y, 13 - (t * 8) % 4, 0, 7); ctx.stroke();
+        }
+    };
+}
+
+// 場外小怪：用連線綁住玩家，詠唱「遠離」或「靠近」
+function TetherAdd(side, kind, castT, yOff = 0) {
+    let t = 0, resolved = false, ok = true;
+    const face = pickMinion();
+    const pos = () => {
+        const b = G.box;
+        return { x: side === 'left' ? b.x - 36 : b.x + b.w + 36, y: b.y + b.h / 2 + yOff };
+    };
+    const FAR = 190, NEAR = 100;
+    const satisfied = () => {
+        const p = pos(), d = Math.hypot(G.soul.x - p.x, G.soul.y - p.y);
+        return kind === 'far' ? d > FAR : d < NEAR;
+    };
+    return {
+        update(dt) {
+            t += dt;
+            if (!resolved && t >= castT) {
+                resolved = true; ok = satisfied();
+                if (ok) SFX.soak(); else { SFX.boom(); G.flash = 0.25; damage(14); }
+            }
+            return t < castT + 0.7;
+        },
+        draw() {
+            const p = pos();
+            const alpha = resolved ? Math.max(0, 1 - (t - castT) / 0.7) : 1;
+            ctx.globalAlpha = alpha;
+            // 連線
+            const good = resolved ? ok : satisfied();
+            ctx.strokeStyle = good ? GREEN : RED; ctx.lineWidth = resolved ? 4 : 2;
+            if (!resolved) ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(G.soul.x, G.soul.y); ctx.stroke();
+            ctx.setLineDash([]);
+            // 小貓兵
+            drawCatMinion(p.x, p.y, 1, face);
+            // 小怪的詠唱條
+            if (!resolved) {
+                ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center';
+                ctx.fillStyle = kind === 'far' ? '#93c5fd' : '#fca5a5';
+                ctx.fillText(kind === 'far' ? '連線・遠離' : '連線・靠近', p.x, p.y - 30);
+                ctx.fillStyle = '#333'; ctx.fillRect(p.x - 26, p.y - 26, 52, 4);
+                ctx.fillStyle = kind === 'far' ? BLUE : RED; ctx.fillRect(p.x - 26, p.y - 26, 52 * Math.min(1, t / castT), 4);
+                ctx.textAlign = 'left';
+            }
+            ctx.globalAlpha = 1;
+        }
+    };
+}
+
+// 半場斬擊（延遲詠唱用）
+function halfRect(side) {
+    const b = tbox();
+    if (side === 'left') return { shape: 'rect', x: b.x, y: b.y, w: b.w / 2, h: b.h };
+    if (side === 'right') return { shape: 'rect', x: b.x + b.w / 2, y: b.y, w: b.w / 2, h: b.h };
+    if (side === 'top') return { shape: 'rect', x: b.x, y: b.y, w: b.w, h: b.h / 2 };
+    return { shape: 'rect', x: b.x, y: b.y + b.h / 2, w: b.w, h: b.h / 2 };
+}
+
+// 'chariot+charges' 這種混合攻擊：取第一個當主要的攻擊
+const AT = kind => ATTACKS[kind.split('+')[0]];
+
+// FF14 詠唱條
+function cast(name, dur) { G.cast = { name, t: 0, dur }; SFX.cast(); }
+
+// =====================================================================
+// 攻擊模式（全部依照難度 G.D 調整速度、密度與預兆時間）
+// =====================================================================
+const SPD = () => 0.75 + 0.25 * G.D;          // 移動速度倍率（1.0 / 1.2 / 1.4）
+const RATE = () => 0.6 + 0.4 * G.D;           // 出現頻率倍率（1.0 / 1.4 / 1.6）
+const WARN = t => t / (0.6 + 0.4 * G.D);      // 預兆時間（難度越高越短）
+const HARD = () => G.D >= 1.5;                // 第二階段
+const RAGE = () => G.D >= 2.3;                // 震怒
+
+const boxC = () => ({ x: G.box.tx + G.box.tw / 2, y: G.box.ty + G.box.th / 2 });
+const tbox = () => ({ x: G.box.tx, y: G.box.ty, w: G.box.tw, h: G.box.th });
+const inBox = (m = 20) => { const b = tbox(); return { x: rand(b.x + m, b.x + b.w - m), y: rand(b.y + m, b.y + b.h - m) }; };
+// 讓其他攻擊的內容在指定時間開始（組合技用）
+function include(a, kind, offset = 0) {
+    ATTACKS[kind].start({ ...a, at: (t, fn) => a.at(t + offset, fn), dur: ATTACKS[kind].dur() });
+}
+// 場外的某個位置（小貓兵、凝視的眼睛等）
+function edgeSpot(m = 46) {
+    const b = tbox(), side = randi(0, 3);
+    if (side === 0) return { x: rand(b.x, b.x + b.w), y: b.y - m };
+    if (side === 1) return { x: b.x + b.w + m, y: rand(b.y, b.y + b.h) };
+    if (side === 2) return { x: rand(b.x, b.x + b.w), y: b.y + b.h + m * 0.6 };
+    return { x: b.x - m, y: rand(b.y, b.y + b.h) };
+}
+// 凝視的眼睛只出現在左右兩側（避免擋到詠唱條和下方的狀態列）
+const gazeSpot = () => { const b = tbox(), L = Math.random() < 0.5; return { x: L ? b.x - 38 : b.x + b.w + 38, y: rand(b.y + 12, b.y + b.h - 12) }; };
+// 小貓兵突進：第一隻瞄準玩家，其他隨機
+function chargeWave(n, warn, width = 28) {
+    for (let i = 0; i < n; i++) {
+        const p = edgeSpot(), aim = i === 0 ? { x: G.soul.x, y: G.soul.y } : inBox(15);
+        const ang = Math.atan2(aim.y - p.y, aim.x - p.x);
+        spawn(LineAoE(p.x, p.y, ang, width, warn, { ray: true, dmg: 10, silent: true }));
+        spawn(DashCat(p.x, p.y, ang, warn));
+    }
+}
+// 放圈（追著玩家腳下）／隨機落下的小圓圈
+const dropPuddle = () => spawn(Puddle(G.soul.x, G.soul.y, WARN(1.0), 2.6));
+const rainCircle = (r = 24, dmg = 8) => { const p = inBox(r); spawn(AoE({ shape: 'circle', x: p.x, y: p.y, r, warn: WARN(1.2), dmg })); };
+// 強制移動用的地面圓圈：保證至少有幾個起點走完之後是安全的
+function marchHazards(dir, n, warn) {
+    const b = tbox(), [vx, vy] = DIRV[dir];
+    const end = (x, y) => ({
+        x: Math.max(b.x + 9, Math.min(b.x + b.w - 9, x + vx * MARCH_DIST)),
+        y: Math.max(b.y + 9, Math.min(b.y + b.h - 9, y + vy * MARCH_DIST))
+    });
+    const nearWall = p => (dir === 0 && p.y < b.y + 26) || (dir === 1 && p.x > b.x + b.w - 26)
+        || (dir === 2 && p.y > b.y + b.h - 26) || (dir === 3 && p.x < b.x + 26);
+    let cs = [];
+    for (let tries = 0; tries < 40; tries++) {
+        cs = Array.from({ length: n }, () => inBox(30));
+        let ok = 0;
+        for (let x = b.x + 12; x < b.x + b.w - 12; x += 10)
+            for (let y = b.y + 12; y < b.y + b.h - 12; y += 10) {
+                const e = end(x, y);
+                if (!nearWall(e) && cs.every(c => Math.hypot(e.x - c.x, e.y - c.y) > 34 + 14)) ok++;
+            }
+        if (ok >= 8) break;
+    }
+    cs.forEach(c => spawn(AoE({ shape: 'circle', x: c.x, y: c.y, r: 34, warn, dmg: 12 })));
+}
+const chariotAoE = (warn, show) => { const c = boxC(); spawn(AoE({ shape: 'circle', x: c.x, y: c.y, r: 70, warn, show, dmg: 12 })); };
+const dynamoAoE = (warn, show) => { const c = boxC(); spawn(AoE({ shape: 'donut', x: c.x, y: c.y, rin: 42, warn, show, dmg: 12 })); };
+// 鋼鐵月環預兆：第一階段顯示 / 遊戲模式最後一刻閃現 / 震怒完全不顯示
+const ffShow = () => !HARD() ? true : RAGE() ? false : 'late';
+
+// 十字斬（diag = 斜十字）
+function crossAoE(diag, w, o = {}, width = 44, at = boxC()) {
+    const a0 = diag ? Math.PI / 4 : 0;
+    spawn(LineAoE(at.x, at.y, a0, width, w, { dmg: 12, ...o }));
+    spawn(LineAoE(at.x, at.y, a0 + Math.PI / 2, width, w, { dmg: 12, ...o, silent: true }));
+}
+const CLEAVE_NAME = { left: '左側斬擊', right: '右側斬擊', top: '上方斬擊', bottom: '下方斬擊' };
+const halfAoE = (side, w, o = {}) => spawn(AoE({ ...halfRect(side), warn: w, dmg: 12, ...o }));
+// 未來觀測／時間停止共用的機制表：fire = 放出預兆，safe = 安全點
+const MECH = {
+    chariot: {
+        name: '肉球鋼鐵',
+        fire: (w, o = {}) => { const c = boxC(); spawn(AoE({ shape: 'circle', x: c.x, y: c.y, r: 70, warn: w, dmg: 12, ...o })); },
+        safe: () => { const c = boxC(), b = tbox(); return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => ({ x: c.x + sx * (b.w / 2 - 34), y: c.y + sy * (b.h / 2 - 28) })); }
+    },
+    dynamo: {
+        name: '肉球月環',
+        fire: (w, o = {}) => { const c = boxC(); spawn(AoE({ shape: 'donut', x: c.x, y: c.y, rin: 42, warn: w, dmg: 12, ...o })); },
+        safe: () => [boxC()]
+    },
+    left:   { name: '左側斬擊', fire: (w, o) => halfAoE('left', w, o),   safe: () => { const c = boxC(), b = tbox(); return [{ x: c.x + b.w / 4, y: c.y }]; } },
+    right:  { name: '右側斬擊', fire: (w, o) => halfAoE('right', w, o),  safe: () => { const c = boxC(), b = tbox(); return [{ x: c.x - b.w / 4, y: c.y }]; } },
+    top:    { name: '上方斬擊', fire: (w, o) => halfAoE('top', w, o),    safe: () => { const c = boxC(), b = tbox(); return [{ x: c.x, y: c.y + b.h / 4 }]; } },
+    bottom: { name: '下方斬擊', fire: (w, o) => halfAoE('bottom', w, o), safe: () => { const c = boxC(), b = tbox(); return [{ x: c.x, y: c.y - b.h / 4 }]; } },
+    cross: {
+        name: '十字斬', fire: (w, o = {}) => crossAoE(false, w, o),
+        safe: () => { const c = boxC(), b = tbox(); return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => ({ x: c.x + sx * b.w * 0.3, y: c.y + sy * b.h * 0.3 })); }
+    },
+    xcross: {
+        name: '斜十字斬', fire: (w, o = {}) => crossAoE(true, w, o),
+        safe: () => { const c = boxC(), b = tbox(); return [{ x: c.x - b.w * 0.36, y: c.y }, { x: c.x + b.w * 0.36, y: c.y }, { x: c.x, y: c.y - b.h * 0.36 }, { x: c.x, y: c.y + b.h * 0.36 }]; }
+    }
+};
+// 時間停止：同時發動的組合（都確認過一定有安全區）
+const TIME_STOP_SETS = [
+    () => { const s = pick(['left', 'right', 'top', 'bottom']); return [(w, o) => MECH.chariot.fire(w, o), (w, o) => halfAoE(s, w, o), (w, o) => crossAoE(false, w, o, 40)]; },
+    () => [(w, o) => MECH.dynamo.fire(w, o), (w, o) => crossAoE(true, w, o, 34)],
+    () => { const s1 = pick(['left', 'right']), s2 = pick(['top', 'bottom']); return [(w, o) => halfAoE(s1, w, o), (w, o) => halfAoE(s2, w, o), (w, o) => crossAoE(true, w, o, 40)]; }
+];
+
+// 未來觀測：n = 段數（α：看得到預兆和殘影／β：只看得到殘影）
+function runFuture(a, n) {
+    const beta = HARD(), gap = beta ? 1.5 : 1.8, first = beta ? 1.4 : 1.6;
+    // 產生機制順序，並確保每一段都走得到
+    const keys = Object.keys(MECH), seq = [];
+    let pos = boxC(), guard = 0;
+    while (seq.length < n && guard++ < 300) {
+        const k = pick(keys);
+        if (seq.length && seq[seq.length - 1].k === k) continue;
+        const spot = MECH[k].safe().sort((p, q) => Math.hypot(p.x - pos.x, p.y - pos.y) - Math.hypot(q.x - pos.x, q.y - pos.y))[0];
+        const limit = 150 * ((seq.length ? gap : first) - 0.4);
+        if (Math.hypot(spot.x - pos.x, spot.y - pos.y) > limit) continue;
+        seq.push({ k, spot }); pos = spot;
+    }
+    const V0 = 1.4, R0 = V0 + first + (n - 1) * gap + 0.9;   // R0：回到現實的時間
+    a.at(0.1, () => cast(beta ? '未來觀測β' : '未來觀測α', 1.2));
+    a.at(V0 - 0.1, () => {
+        const c = boxC(); G.soul.x = c.x; G.soul.y = c.y;
+        G.vision = { beta }; G.flash = 0.3; SFX.crack();
+        spawn(Ghost(seq, first + 0.1, gap));
+    });
+    // 未來：α 看得到預兆和殘影，β 只看得到殘影
+    seq.forEach((m, i) => {
+        const res = V0 + first + i * gap, tele = res - 1.2;
+        a.at(tele, () => MECH[m.k].fire(res - tele, { fake: true, show: beta ? false : true }));
+    });
+    a.at(R0 - 0.5, () => {
+        G.vision = null; G.ents = []; G.flash = 0.7; SFX.crack();
+        const c = boxC(); G.soul.x = c.x; G.soul.y = c.y;
+        spawn(FloatText(c.x, c.y - 26, '時間回溯', '#c4b5fd'));
+    });
+    // 現實：預兆不再顯示（第一階段只會在最後一刻閃一下）
+    seq.forEach((m, i) => {
+        const res = R0 + first + i * gap, tele = res - 1.2;
+        a.at(tele, () => {
+            cast(`未來重現 ${i + 1} / ${n}`, 1.2);
+            MECH[m.k].fire(res - tele, { show: HARD() ? false : 'late' });
+        });
+    });
+}
+
+const ATTACKS = {
+    // ---------- 單一攻擊（每一招約 12 秒，循環到時間結束）----------
+    lightDark: {   // 光與暗：站在與自己 debuff 同色的區域
+        box: () => [260, 165], dur: () => 12,
+        hint: '水晶的顏色就是你的屬性（金＝光、紫＝暗），站到同屬性的區域！',
+        start(a) {
+            const w = WARN(2.4), step = w + 0.6;
+            const pats = HARD() ? ['lr', 'rl', 'tb', 'bt', 'q1', 'q2'] : ['lr', 'rl', 'tb', 'bt'];
+            a.at(0, () => setLD(Math.random() < 0.5 ? 'light' : 'dark'));
+            let last = null;
+            const flips = [];
+            for (let i = 0, t = 0.3; i === 0 || t + w < a.dur - 0.2; i++, t += step) {
+                a.at(t, () => {
+                    let p; do { p = pick(pats); } while (p === last); last = p;
+                    cast(i % 2 ? '光暗交錯' : '光暗之陣', w);
+                    spawn(LDField(p, w));
+                });
+                // 詠唱途中屬性反轉：第一階段一次、第二階段隔一輪、震怒每一輪都可能
+                if ((!HARD() && i === 2) || (HARD() && !RAGE() && i % 2 === 1) || (RAGE() && i >= 1 && Math.random() < 0.7)) flips.push(t + w * 0.5);
+            }
+            scheduleFlips(a, flips);
+            if (RAGE()) for (let t = 1.2; t < a.dur - 1; t += 1.8) a.at(t, dropPuddle);
+        }
+    },
+    rotLaser: {   // 旋轉激光：跟著光束轉的方向繞圈
+        box: () => [240, 170], dur: () => 12, harass: 2,
+        hint: '光束會旋轉：跟著箭頭的方向繞著中心走！',
+        start(a) {
+            const w = WARN(1.6), life = 4.2, gap = w + life + 0.2;
+            for (let i = 0, t = 0.2; i === 0 || t + w + 1.5 < a.dur; i++, t += gap) a.at(t, () => {
+                const c = boxC(), dir = i % 2 ? -1 : 1;
+                cast(dir > 0 ? '肉球光輪・順' : '肉球光輪・逆', w);
+                spawn(RotLaser(c.x, c.y, HARD() ? 4 : 3, rand(0, Math.PI * 2), dir * (0.55 + 0.2 * G.D), w, life));
+            });
+            if (HARD()) for (let t = 1.6; t < a.dur - 1; t += 1.6 / RATE()) a.at(t, dropPuddle);
+        }
+    },
+    march: {   // 強制移動
+        box: () => [250, 170], dur: () => 12,
+        hint: '強制移動：倒數結束會被迫往箭頭方向走，先站好位置！',
+        start(a) {
+            const timer = Math.max(2.2, WARN(3.4)), walk = MARCH_DIST / MARCH_SPD, len = timer + walk + 0.8;
+            for (let i = 0, t = 0.2; i === 0 || t + len < a.dur + 0.4; i++, t += len) a.at(t, () => {
+                const dir = randi(0, 3), resolveAt = timer + walk + 0.12;
+                cast('強制移動', timer);
+                spawn(ForcedMarch(dir, timer));
+                spawn(SpikeWall(['top', 'right', 'bottom', 'left'][dir], resolveAt + 0.3, timer));
+                marchHazards(dir, RAGE() ? 3 : 2, resolveAt);
+            });
+        }
+    },
+    aoe: {
+        box: () => [260, 165], dur: () => 13,
+        start(a) {
+            const lanes = (vertical, w) => {
+                const b = tbox(), n = 4, safe = randi(0, n - 1);
+                for (let i = 0; i < n; i++) {
+                    if (i === safe) continue;
+                    if (vertical) spawn(AoE({ shape: 'rect', x: b.x + i * b.w / n, y: b.y, w: b.w / n, h: b.h, warn: w }));
+                    else spawn(AoE({ shape: 'rect', x: b.x, y: b.y + i * b.h / n, w: b.w, h: b.h / n, warn: w }));
+                }
+            };
+            for (let o = 0.1, cycle = 0; cycle === 0 || o < a.dur - 4; o += 6.3, cycle++) {
+                const w = WARN(1.5 - Math.min(0.4, cycle * 0.2));
+                a.at(o, () => { cast('肉球直線', w); lanes(true, w); });
+                a.at(o + 1.8, () => {
+                    cast('貓爪噴發', WARN(1.3));
+                    spawn(AoE({ shape: 'circle', x: G.soul.x, y: G.soul.y, r: 34, warn: WARN(1.3) }));
+                    for (let i = 0; i < 2 + Math.round(G.D) + cycle; i++) { const p = inBox(25); spawn(AoE({ shape: 'circle', x: p.x, y: p.y, r: 34, warn: WARN(1.3) })); }
+                });
+                a.at(o + 3.4, () => { cast('橫掃肉球', w); lanes(false, w); });
+                a.at(o + 4.6, () => cast('追蹤預兆', 1.4));
+                for (let i = 0; i < 4; i++) a.at(o + 4.6 + i * 0.35, () => spawn(AoE({ shape: 'circle', x: G.soul.x, y: G.soul.y, r: 28, warn: WARN(1.0) })));
+            }
+        }
+    },
+    charges: {   // 小貓兵突進（第二階段混入半場斬擊）
+        box: () => [240, 165], dur: () => 12, calm: true,   // 本身就是直線，不再額外加小貓砲
+        start(a) {
+            // 頻率可以高，但一波最多 2 隻，而且上一波衝完才出下一波 → 畫面上最多 2 條直線，一定有空位
+            const w = WARN(1.0), gap = Math.max(0.65, w + 0.1);
+            for (let t = 0.3; t < a.dur - 1.2; t += gap) {
+                const n = t / a.dur < 0.35 ? 1 : 2;
+                a.at(t, () => chargeWave(n, w, 26 + G.D * 3));
+            }
+            if (HARD()) [3.2, 8.0].forEach(t0 => a.at(t0, () => {
+                const s = pick(['left', 'right', 'top', 'bottom']), w = WARN(1.8);
+                cast(CLEAVE_NAME[s], w); halfAoE(s, w);
+            }));
+        }
+    },
+    gravity: {   // 藍色水晶：重力＋光暗之劍
+        mode: 'blue', box: () => [280, 130], dur: () => 12,
+        hint: '按 ↑ 跳躍。銀劍要跳過；光／暗的劍，和水晶顏色一樣就能直接穿過！',
+        start(a) {
+            const sp = -150 * SPD(), b = tbox(), cross = (b.w / 2 + 6) / -sp;   // 劍從右邊走到中線的時間
+            const flips = [];
+            a.at(0, () => setLD(pick(['light', 'dark'])));
+            for (let t = 1.0, i = 0; t < a.dur - 1.4; i++) {
+                const k = i % 6, tt = t;
+                if (k === 3 && t + cross < a.dur - 0.5) {
+                    // 光暗之門：整面高的屬性劍，經過中線的瞬間水晶的屬性剛好反轉
+                    // → 屬性等於「反轉前」就要站右邊早點碰到，等於「反轉後」就要站左邊晚點碰到
+                    flips.push(tt + cross);
+                    const before = Math.random() < 0.5;
+                    a.at(tt, () => {
+                        const elem = before ? G.ld : (G.ld === 'light' ? 'dark' : 'light');
+                        spawn(Sword(b.x + b.w + 6, b.y, 14, b.h, sp, 0, elem, false));
+                    });
+                    t += cross + 1.1;
+                    continue;
+                }
+                if (k === 5 && HARD()) a.at(tt, () => spawn(Sword(b.x + b.w + 6, b.y - 4, 14, b.h - 34, sp, 0, 'none', false)));
+                else {
+                    const elem = HARD() && Math.random() < 0.45 ? pick(['light', 'dark']) : (Math.random() < 0.25 ? pick(['light', 'dark']) : 'none');
+                    a.at(tt, () => { const hh = rand(20, HARD() ? 42 : 32); spawn(Sword(b.x + b.w + 6, b.y + b.h - hh, 14, hh + 4, sp, 0, elem, true)); });
+                }
+                t += rand(0.75, 1.0) / RATE();
+            }
+            scheduleFlips(a, flips);
+        }
+    },
+    chariot: {
+        box: () => [260, 165], dur: () => 12, marker: true,
+        start(a) {
+            const c = HARD() ? 2.0 : 2.6;
+            const seq = HARD() ? ['cd', 'dc', 'c', 'd'] : ['c', 'd', 'cd', 'dc'];
+            let t = 0.3;
+            for (const s of seq) {
+                const len = s.length === 2 ? c + 1.9 : c + 0.7;
+                if (t > 0.3 && t + len > a.dur + 0.3) break;
+                a.at(t, () => {
+                    const name = { c: '肉球鋼鐵', d: '肉球月環', cd: '鋼鐵月環', dc: '月環鋼鐵' }[s];
+                    cast(name, c);
+                    [...s].forEach((m, j) => (m === 'c' ? chariotAoE : dynamoAoE)(c + j * 1.3, ffShow()));
+                });
+                t += len;
+            }
+        }
+    },
+    towers: {
+        box: () => [260, 165], dur: () => 12,
+        start(a) {
+            const step = HARD() ? 1.6 : 2.2, warn = WARN(2.8);
+            let last = boxC();
+            for (let t = 0.4; t + warn < a.dur - 0.4; t += step) a.at(t, () => {
+                let p, tries = 0;
+                do { p = inBox(32); tries++; } while (Math.hypot(p.x - last.x, p.y - last.y) < 110 && tries < 30);
+                last = p;
+                spawn(Tower(p.x, p.y, 28, warn));
+            });
+            for (let t = 0.8; t < a.dur - 1; t += 1.1 / RATE()) a.at(t, () => rainCircle(22));
+        }
+    },
+    knockback: {
+        box: () => [250, 170], dur: () => 12,
+        start(a) {
+            const warn = WARN(2.2), gap = HARD() ? 3.0 : 3.6;
+            a.at(0, () => { spawn(SpikeWall('left', a.dur)); spawn(SpikeWall('right', a.dur)); });
+            for (let i = 0, t = 0.2; t + warn + 0.6 < a.dur; i++, t += gap) a.at(t, () => {
+                cast('肉球擊退', warn);
+                const c = boxC();
+                const p = i === 0 ? c : { x: c.x + rand(-50, 50), y: c.y + rand(-35, 35) };
+                spawn(Knock(p.x, p.y, warn, 680, !RAGE()));
+                if (i >= 1) spawn(AoE({ shape: 'circle', x: p.x, y: p.y, r: 30, warn }));
+            });
+            for (let t = 1.0; t < a.dur - 1; t += 1.4 / RATE()) a.at(t, () => rainCircle(22));
+        }
+    },
+    quiz: {
+        box: () => [400, 150], dur: () => 99, calm: true,
+        start(a) { startQuiz(); }
+    },
+    // ---------- 新的 FF14 機制 ----------
+    exaflare: {   // 連鎖爆炎
+        box: () => [270, 170], dur: () => 12,
+        hint: '連鎖爆炎：等前一格炸完，立刻躲進炸過的位置！',
+        start(a) {
+            const iv = HARD() ? 0.42 : 0.55, w = WARN(1.6);
+            const rows = t0 => a.at(t0, () => {
+                cast('連鎖爆炎', w);
+                const b = tbox(), n = 3, rh = b.h / n, r = rh / 2, step = r * 1.8;
+                const delays = shuffle([0, iv * 1.5, iv * 3]);
+                for (let i = 0; i < n; i++) {
+                    const fromLeft = HARD() ? Math.random() < 0.5 : i % 2 === 0, y = b.y + rh * (i + 0.5);
+                    spawn(Exaflare(fromLeft ? b.x + r * 0.6 : b.x + b.w - r * 0.6, y, fromLeft ? step : -step, 0, r, w + delays[i], iv));
+                }
+            });
+            const cols = t0 => a.at(t0, () => {
+                cast('連鎖爆炎・縱', w);
+                const b = tbox(), n = 5, cw = b.w / n, r = cw / 2, step = r * 1.8;
+                const delays = shuffle([0, 1, 2, 3, 4].map(i => i * iv * 0.8));
+                for (let i = 0; i < n; i++) {
+                    const fromTop = Math.random() < 0.5, x = b.x + cw * (i + 0.5);
+                    spawn(Exaflare(x, fromTop ? b.y + r * 0.6 : b.y + b.h - r * 0.6, 0, fromTop ? step : -step, r, w + delays[i], iv));
+                }
+            });
+            rows(0.2);
+            if (HARD()) cols(5.6); else rows(5.8);
+        }
+    },
+    gaze: {   // 凝視：用小箭頭表示面向
+        box: () => [260, 165], dur: () => 12, facing: true,
+        hint: '水晶前的小箭頭＝面向（最後移動的方向）。凝視時要背對眼睛！',
+        start(a) {
+            const w = WARN(2.4), step = w + 0.8;
+            for (let i = 0, t = 0.3; t + w < a.dur - 0.2; i++, t += step) {
+                const inv = HARD() && Math.random() < 0.4;
+                a.at(t, () => {
+                    const p = gazeSpot();
+                    cast(inv ? '逆・石化凝視' : '石化凝視', w);
+                    spawn(GazeEye(p.x, p.y, w, inv));
+                    // 震怒：兩隻眼睛（只有「別看我」才會出兩隻，一定有解）
+                    if (RAGE() && !inv) {
+                        const b = tbox(), q = { x: p.x < b.x ? b.x + b.w + 38 : b.x - 38, y: rand(b.y + 12, b.y + b.h - 12) };
+                        spawn(GazeEye(q.x, q.y, w, false));
+                    }
+                });
+                // 詠唱途中在腳下放圈，逼你移動之後再轉向
+                const drop = Math.max(0.3, w - 1.4);
+                a.at(t + drop, () => spawn(AoE({ shape: 'circle', x: G.soul.x, y: G.soul.y, r: 34, warn: 0.9, dmg: 10 })));
+            }
+        }
+    },
+    proximity: {   // 距離衰減
+        box: () => [270, 170], dur: () => 12,
+        hint: '隕石：離落點越遠，受到的傷害越低！',
+        start(a) {
+            const w = WARN(2.6), step = w + 0.9;
+            for (let t = 0.3; t + w < a.dur - 0.2; t += step) a.at(t, () => {
+                const b = tbox(), c = boxC(), ang = rand(0, Math.PI * 2);
+                const p = { x: c.x + Math.cos(ang) * b.w * 0.3, y: c.y + Math.sin(ang) * b.h * 0.3 };
+                cast('肉球隕石', w);
+                spawn(Meteor(p.x, p.y, w));
+                if (HARD()) for (let j = 0; j < (RAGE() ? 2 : 1); j++) {
+                    const q = inBox(30);
+                    spawn(LineAoE(q.x, q.y, pick([0, Math.PI / 2]), 36, w, { dmg: 12, silent: true }));
+                }
+            });
+        }
+    },
+    cross: {   // 十字／斜十字斬
+        box: () => [260, 165], dur: () => 12,
+        start(a) {
+            const w = WARN(1.9), step = HARD() ? w + 1.6 : 2.8;
+            for (let i = 0, t = 0.3; t + w < a.dur - 0.2; i++, t += step) {
+                const diag = Math.random() < 0.5, at = HARD() ? inBox(55) : boxC();
+                a.at(t, () => { cast(diag ? '斜十字斬' : '十字斬', w); crossAoE(diag, w, {}, 44, at); });
+                // 第二階段：緊接著另一種十字（找兩者共同的安全區）
+                if (HARD()) a.at(t + w - 0.4, () => crossAoE(!diag, 1.3, {}, 44, at));
+                if (RAGE() && i % 2) a.at(t + w + 0.9, () => chariotAoE(1.0, true));
+            }
+        }
+    },
+    tileFall: {   // 場地崩落
+        box: () => [264, 168], dur: () => 12,
+        hint: '亮紅色的地板會崩落，快換到別塊地板上！',
+        start(a) {
+            const w = WARN(2.2), gap = 1.6, down = 1.0;
+            const all = [...Array(12).keys()];
+            const len = HARD() ? w + gap + 1.2 : w + 1.4;
+            for (let i = 0, t = 0.2; i === 0 || t + len < a.dur + 0.3; i++, t += len + 0.2) a.at(t, () => {
+                cast('大地崩落', w);
+                if (!HARD()) spawn(TileFloor([shuffle(all.slice()).slice(0, 7)], w, gap, down));
+                else {
+                    // 兩波：① 崩落並恢復後，② 再崩落
+                    const s = shuffle(all.slice());
+                    spawn(TileFloor([s.slice(0, 6), s.slice(6, RAGE() ? 12 : 11)], w, gap, down * 0.9));
+                }
+            });
+        }
+    },
+    timeStop: {   // 時間停止：預兆一個個疊上來，時間恢復時同時發動
+        box: () => [260, 165], dur: () => 12, marker: true,
+        hint: '時間停止中出現的預兆，會在時間恢復的瞬間同時發動！',
+        start(a) {
+            const S = HARD() ? 2.8 : 3.4;
+            const round = t0 => {
+                const pieces = pick(TIME_STOP_SETS)(), resume = t0 + 1.2 + S;
+                a.at(t0, () => cast('時間停止', 1.2));
+                a.at(t0 + 1.2, () => { G.timeStop = { t: 0, dur: S }; G.flash = 0.25; SFX.crack(); });
+                pieces.forEach((fire, i) => {
+                    const st = t0 + 1.35 + i * 0.7;
+                    a.at(st, () => { fire(resume - st, { frozen: true, hideAfter: RAGE() ? 1.0 : undefined }); SFX.warn(); });
+                });
+                a.at(resume - 0.01, () => { G.timeStop = null; G.flash = 0.35; SFX.mode(); });
+                return resume;
+            };
+            const r1 = round(0.2);
+            if (r1 + 1.0 + 1.2 + S < a.dur + 0.2) round(r1 + 1.0);
+        }
+    },
+    future: {   // 未來觀測（絕亞歷山大）：先看未來，再憑記憶重現
+        box: () => [260, 170], dur: () => HARD() ? 14.8 : 13.4, marker: true, calm: true,
+        start(a) { runFuture(a, HARD() ? 4 : 3); }
+    },
+    fireBait: {   // 烈焰足跡：引導的地火會長時間留在地上
+        box: () => [260, 170], dur: () => HARD() ? 13 : 14,
+        hint: '地火會一直留在地上！先看詠唱的後續（鋼鐵／月環），再決定把地火放哪裡。',
+        start(a) {
+            const drops = HARD() ? 6 : 5, iv = HARD() ? 0.6 : 0.75, dw = 0.75, life = 6.0, w2 = Math.max(1.4, WARN(2.0));
+            const round = t0 => {
+                const follow = pick(['dynamo', 'chariot']), total = 0.9 + drops * iv;
+                a.at(t0, () => {
+                    cast(follow === 'dynamo' ? '烈焰足跡・月環' : '烈焰足跡・鋼鐵', total + w2);
+                    spawn(FireMark(total));
+                });
+                for (let i = 0; i < drops; i++) a.at(t0 + 0.9 + i * iv, () => spawn(Puddle(G.soul.x, G.soul.y, dw, life, 24, 'fire')));
+                a.at(t0 + total, () => MECH[follow].fire(w2, {}));
+                return t0 + total + w2 + 0.4;
+            };
+            const e1 = round(0.2);
+            if (e1 + 0.9 + drops * iv + w2 < a.dur + 0.3) round(e1);
+        }
+    },
+    twinBoss: {   // 雙 BOSS 合體技：INU 和守門騎士同時詠唱，兩邊的機制都要解
+        box: () => [270, 170], dur: () => 19.5, minDur: 19.5, facing: true, calm: true,
+        hint: `雙 BOSS：INU 和${CONFIG.KNIGHT.NAME}會同時詠唱！看清楚兩條詠唱條，還有框裡${CONFIG.KNIGHT.NAME}的劍指向哪裡。`,
+        start(a) {
+            const w = Math.max(2.6, WARN(3.8)), b = tbox(), c = boxC();     // 詠唱比較長，給玩家時間同時看兩邊
+            const kShow = RAGE() ? 'late' : true;     // 震怒：騎士的預兆只在最後一刻出現，要看他的劍
+            a.at(0, () => spawn(EnemyKnight()));
+            const COMBO = {
+                // INU：鋼鐵／月環 ＋ 騎士：橫掃（劍指的那一側半場）
+                cleave(t0) {
+                    const side = randi(0, 3), off = rand(-18, 18), dynamo = Math.random() < 0.5;
+                    let kx, ky, face;
+                    if (side < 2) { kx = c.x + (side ? 95 : -95); ky = c.y + off; face = pick([-Math.PI / 2, Math.PI / 2]); }
+                    else { kx = c.x + off; ky = c.y + (side === 2 ? -55 : 55); face = pick([0, Math.PI]); }
+                    a.at(t0 - 0.9, () => knightTo(kx, ky, face));
+                    a.at(t0, () => {
+                        cast(dynamo ? '肉球月環' : '肉球鋼鐵', w); (dynamo ? MECH.dynamo : MECH.chariot).fire(w, {});
+                        kcast('橫掃', w);
+                        spawn(LineAoE(kx, ky, face, 1800, w, { ray: true, show: kShow, dmg: 14, silent: true }));
+                    });
+                    return w + 0.9;
+                },
+                // INU：踩塔 ＋ 騎士：突進（踩完塔才鎖定，要立刻閃開直線）
+                charge(t0) {
+                    const ks = { x: pick([b.x + 25, b.x + b.w - 25]), y: rand(b.y + 25, b.y + b.h - 25) };
+                    a.at(t0 - 0.9, () => knightTo(ks.x, ks.y, Math.atan2(c.y - ks.y, c.x - ks.x)));
+                    a.at(t0, () => {
+                        let p, n = 0; do { p = inBox(40); n++; } while (Math.hypot(p.x - ks.x, p.y - ks.y) < 90 && n < 30);
+                        cast('肉球之塔', w); spawn(Tower(p.x, p.y, 28, w));
+                        kcast('突進', w + 1.0);
+                        spawn(KnightCharge(w + 0.15, 0.85));
+                        // 震怒：多兩個小圓圈（不會蓋到塔上）
+                        if (RAGE()) for (let i = 0; i < 2; i++) {
+                            let q, n2 = 0; do { q = inBox(22); n2++; } while (Math.hypot(q.x - p.x, q.y - p.y) < 62 && n2 < 30);
+                            spawn(AoE({ shape: 'circle', x: q.x, y: q.y, r: 22, warn: WARN(1.2), dmg: 8 }));
+                        }
+                    });
+                    return w + 2.0;
+                },
+                // INU：光暗之陣 ＋ 騎士：盾擊（擊退後要落在同色的區域）
+                bash(t0) {
+                    const kp = { x: c.x + rand(-40, 40), y: c.y + rand(-25, 25) }, pat = pick(['lr', 'rl', 'tb', 'bt']);
+                    a.at(t0 - 0.9, () => knightTo(kp.x, kp.y));
+                    a.at(t0, () => {
+                        if (!G.debuffs.some(d => d.kind === 'ld')) setLD(pick(['light', 'dark']));
+                        cast('光暗之陣', w); spawn(LDField(pat, w));
+                        kcast('盾擊', w - 0.5);
+                        spawn(Knock(kp.x, kp.y, w - 0.5, 420, !RAGE()));
+                    });
+                    return w + 0.9;
+                },
+                // INU：十字斬 ＋ 騎士：威壓凝視（解完十字，還要背對騎士）
+                gaze(t0) {
+                    const ks = { x: pick([b.x + 25, b.x + b.w - 25]), y: rand(b.y + 25, b.y + b.h - 25) }, diag = Math.random() < 0.5;
+                    a.at(t0 - 0.9, () => knightTo(ks.x, ks.y, Math.atan2(c.y - ks.y, c.x - ks.x)));
+                    a.at(t0, () => {
+                        cast(diag ? '斜十字斬' : '十字斬', w); crossAoE(diag, w);
+                        kcast('威壓凝視', w);
+                        spawn(GazeEye(ks.x, ks.y - 4, w, false));
+                    });
+                    return w + 0.9;
+                }
+            };
+            let t0 = 1.0;
+            shuffle(Object.keys(COMBO)).forEach((k, i) => {
+                if (i > 0 && t0 + w + 0.3 > a.dur) return;
+                t0 += COMBO[k](t0) + 0.9;
+            });
+        }
+    },
+    allyDuo: {   // 友軍雙人機制：和援軍一起解
+        box: () => [270, 170], dur: () => 13,
+        hint: '雙人機制：分攤要站進援軍的圈、滅世砲要躲到盾後面、連線看指示拉開或靠近！',
+        start(a) {
+            const w = Math.max(2.4, WARN(3.4)), b = tbox(), c = boxC();
+            a.at(0, () => spawn(AllyNPC()));
+            const DUO = {
+                stack(t0) {
+                    a.at(t0, () => {
+                        cast('肉球重擊（分攤）', w);
+                        const p = inBox(45); allyGo(p.x, p.y);
+                        spawn(StackMark(w));
+                        for (let i = 0; i < (HARD() ? 4 : 3); i++) {
+                            let q, n = 0; do { q = inBox(26); n++; } while (Math.hypot(q.x - p.x, q.y - p.y) < 70 && n < 30);
+                            spawn(AoE({ shape: 'circle', x: q.x, y: q.y, r: 26, warn: w * 0.6, dmg: 10 }));
+                        }
+                    });
+                },
+                shield(t0) {
+                    a.at(t0, () => {
+                        cast('肉球滅世砲（武裝戍衛）', w);
+                        allyGo(rand(b.x + 60, b.x + b.w - 60), b.y + 34);
+                        spawn(ShieldCover(w));
+                    });
+                },
+                tether(t0) {
+                    const far = Math.random() < 0.5;
+                    a.at(t0, () => { cast(far ? '雙人連線・拉開' : '雙人連線・靠近', w); spawn(PartnerTether(far, w)); });
+                    // 援軍會到處走，要跟著調整位置
+                    for (let j = 0; j < 2; j++) a.at(t0 + 0.2 + j * w * 0.3, () => {
+                        const side = j % 2 ? 1 : -1;
+                        if (far) allyGo(c.x + side * rand(60, b.w / 2 - 25), rand(b.y + 25, b.y + b.h - 25));
+                        else { const p = inBox(30); allyGo(p.x, p.y); }
+                    });
+                }
+            };
+            const order = shuffle(['stack', 'shield', 'tether']), len = w + 1.4;
+            order.forEach((m, i) => { if (i === 0 || 0.3 + i * len + w < a.dur + 0.2) DUO[m](0.3 + i * len); });
+        }
+    },
+    futureMini: {   // 絕・萬貓天動用的短版未來觀測（兩段）
+        box: () => [260, 170], dur: () => 8.6, marker: true, calm: true,
+        start(a) { runFuture(a, 2); }
+    },
+    // ---------- 擊退系列 ----------
+    knockChariot: {
+        box: () => [250, 170], dur: () => 12, marker: true,
+        start(a) {
+            const w = WARN(2.4), gap = w + 1.6;
+            for (let t = 0.2; t + w + 0.9 < a.dur; t += gap) a.at(t, () => {
+                const c = boxC();
+                cast('擊退鋼鐵', w);
+                spawn(Knock(c.x, c.y, w, 520, !RAGE()));
+                chariotAoE(w + 0.7, ffShow());
+            });
+        }
+    },
+    knockDynamo: {
+        box: () => [250, 170], dur: () => 12, marker: true,
+        start(a) {
+            const w = WARN(2.8), gap = w + 1.5;
+            for (let t = 0.2; t + w + 1.0 < a.dur; t += gap) a.at(t, () => {
+                const c = boxC();
+                const ang = rand(0, Math.PI * 2), src = { x: c.x + Math.cos(ang) * 80, y: c.y + Math.sin(ang) * 55 };
+                cast('擊退月環', w);
+                spawn(Knock(src.x, src.y, w, 420, !RAGE()));
+                dynamoAoE(w + 0.75, ffShow());
+            });
+        }
+    },
+    knockTower: {
+        box: () => [260, 170], dur: () => 12,
+        start(a) {
+            const w = WARN(3.0), gap = w + 1.4;
+            for (let t = 0.2; t + w + 1.0 < a.dur; t += gap) a.at(t, () => {
+                const b = tbox(), dist = 420 / KNOCK_DECAY;
+                let T, S, tries = 0;
+                do {
+                    T = inBox(35);
+                    const ang = rand(0, Math.PI * 2);
+                    S = { x: T.x - Math.cos(ang) * (dist + 25), y: T.y - Math.sin(ang) * (dist + 25) };
+                    tries++;
+                } while ((S.x < b.x + 15 || S.x > b.x + b.w - 15 || S.y < b.y + 15 || S.y > b.y + b.h - 15) && tries < 60);
+                cast('擊退踩塔', w);
+                spawn(Knock(S.x, S.y, w, 420, !RAGE()));
+                spawn(Tower(T.x, T.y, 28, w + 0.7));
+            });
+        }
+    },
+    // ---------- 引導扇形 ----------
+    baitCone: {
+        box: () => [260, 170], dur: () => 12,
+        start(a) {
+            const bait = WARN(1.6), warn = WARN(1.2), spread = HARD() ? 1.0 : 0.85, step = HARD() ? 2.1 : 2.7;
+            for (let t = 0.2; t + bait + warn + 0.3 < a.dur; t += step) a.at(t, () => {
+                const b = tbox();
+                cast('肉球扇擊（引導）', bait);
+                spawn(BaitCone(b.x + b.w / 2, b.y - 8, bait, warn, spread));
+            });
+            if (RAGE()) for (let t = 1; t < a.dur - 1; t += 1.4) a.at(t, dropPuddle);
+        }
+    },
+    // ---------- 場外小怪連線 ----------
+    tether: {
+        box: () => [260, 150], dur: () => 12,
+        start(a) {
+            const ct = WARN(3.2), gap = ct + 0.8;
+            const sides = () => Math.random() < 0.5 ? ['left', 'right'] : ['right', 'left'];
+            for (let r = 0, t = 0.3; t + ct + 0.3 < a.dur; r++, t += gap) a.at(t, () => {
+                const [s1, s2] = sides();
+                if (!HARD()) spawn(TetherAdd(s1, r % 2 ? 'near' : 'far', ct));
+                else { spawn(TetherAdd(s1, 'near', ct, rand(-30, 30))); spawn(TetherAdd(s2, 'far', ct, rand(-30, 30))); }
+            });
+            if (RAGE()) for (let t = 1; t < a.dur - 1; t += 1.0) a.at(t, () => rainCircle(22));
+        }
+    },
+    // ---------- 數字 debuff ----------
+    limitCut: {
+        box: () => [260, 170], dur: () => HARD() ? 13 : 10,
+        start(a) {
+            const first = HARD() ? 2.4 : 3.6, step = HARD() ? 0.9 : 1.4;
+            const roundLen = first + 3 * step + 1.2;     // 一輪全部結束才開始下一輪
+            for (let t = 0.2; t + roundLen - 0.6 < a.dur; t += roundLen) a.at(t, () => {
+                const mine = randi(1, 4), b = tbox(), c = boxC();
+                const deb = { kind: 'limit', n: mine, hidden: true };   // 號碼直接畫在水晶右上角
+                G.debuffs = G.debuffs.filter(d => d.kind !== 'limit');
+                G.debuffs.push(deb);
+                cast('肉球序列', first);
+                const spots = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => ({ x: c.x + sx * (b.w / 2 - 45), y: c.y + sy * (b.h / 2 - 38) }));
+                spots.sort(() => Math.random() - 0.5);
+                spots.forEach((p, i) => spawn(NumberCircle(p.x, p.y, 32, ['I', 'II', 'III', 'IV'][i], first + i * step, i + 1 === mine ? deb : null, RAGE() ? 1.4 : undefined)));
+            });
+            for (let t = 1; t < a.dur - 1; t += 1.6 / RATE()) a.at(t, () => rainCircle(20, 6));
+        }
+    },
+    accelBomb: {
+        box: () => [240, 160], dur: () => 12,
+        start(a) {
+            for (let t = 0.2; t + 4.8 < a.dur; t += 5.2) a.at(t, () => spawn(AccelBomb(rand(3.8, 4.6))));
+            for (let t = 0.5; t < a.dur - 0.8; t += 1.2 / RATE()) a.at(t, dropPuddle);
+        }
+    },
+    // ---------- 延遲詠唱（震怒限定）：記住四個機制 ----------
+    delayed: {
+        box: () => [260, 170], dur: () => 13.5, minDur: 13.5, marker: true, calm: true,
+        start(a) {
+            const pool = () => [
+                { name: '肉球鋼鐵', fire: () => chariotAoE(0.01, false) },
+                { name: '肉球月環', fire: () => dynamoAoE(0.01, false) },
+                { name: '左側斬擊', fire: () => spawn(AoE({ ...halfRect('left'), warn: 0.01, show: false, dmg: 12 })) },
+                { name: '右側斬擊', fire: () => spawn(AoE({ ...halfRect('right'), warn: 0.01, show: false, dmg: 12 })) },
+                { name: '上方斬擊', fire: () => spawn(AoE({ ...halfRect('top'), warn: 0.01, show: false, dmg: 12 })) },
+                { name: '下方斬擊', fire: () => spawn(AoE({ ...halfRect('bottom'), warn: 0.01, show: false, dmg: 12 })) }
+            ].sort(() => Math.random() - 0.5);
+            const round = (o, n) => {
+                const picks = pool().slice(0, n);
+                a.at(o, () => { G.delayed = []; });
+                picks.forEach((m, i) => {
+                    a.at(o + 0.2 + i * 1.5, () => cast(`${m.name}（延遲）`, 1.3));
+                    a.at(o + 1.5 + i * 1.5, () => { G.delayed.push({ name: m.name }); SFX.mode(); });
+                });
+                const mid = o + 0.2 + n * 1.5 + 0.2;
+                a.at(mid, () => { cast('小貓兵突進', 1.0); chargeWave(3, 1.0, 30); });
+                picks.forEach((m, i) => {
+                    const ft = mid + 1.6 + i * 1.4;
+                    a.at(ft - 0.9, () => { G.delayed.forEach(d => d.next = false); if (G.delayed[i]) G.delayed[i].next = true; });
+                    a.at(ft, () => { m.fire(); if (G.delayed[i]) { G.delayed[i].done = true; G.delayed[i].next = false; } });
+                });
+            };
+            round(0, 4);
+        }
+    },
+    // ---------- 組合技 ----------
+    gravityBlast: {   // 重力中，頭上落雷
+        mode: 'blue', box: () => [280, 130], dur: () => 12,
+        start(a) {
+            const sp = -130 * SPD();
+            a.at(0, () => setLD(pick(['light', 'dark'])));
+            const flips = [];
+            for (let t = 3.5; t < a.dur - 1; t += rand(3.0, 3.8)) flips.push(t);
+            scheduleFlips(a, flips);
+            for (let t = 1.2; t < a.dur - 1.2; t += rand(1.1, 1.4) / RATE()) {
+                const elem = Math.random() < 0.4 ? pick(['light', 'dark']) : 'none';
+                a.at(t, () => {
+                    const b = tbox(), hh = rand(18, 30);
+                    spawn(Sword(b.x + b.w + 6, b.y + b.h - hh, 14, hh + 4, sp, 0, elem, true));
+                });
+            }
+            for (let t = 2.0; t < a.dur - 1.4; t += 2.0 / RATE()) a.at(t, () => {
+                const b = tbox();
+                const x = Math.max(b.x + 20, Math.min(b.x + b.w - 20, G.soul.x));
+                spawn(LineAoE(x, b.y, Math.PI / 2, 26, WARN(1.3), { dmg: 10 }));
+                if (RAGE()) {
+                    const x2 = x < b.x + b.w / 2 ? x + rand(90, 120) : x - rand(90, 120);
+                    spawn(LineAoE(x2, b.y, Math.PI / 2, 26, WARN(1.3), { dmg: 10, silent: true }));
+                }
+            });
+        }
+    },
+    // ---------- 絕・萬貓天動專用 ----------
+    slam: {
+        mode: 'blue', box: () => [240, 140], dur: () => 4.5,
+        start(a) {
+            for (let t = 0.35; t < a.dur - 0.9; t += 1.3) a.at(t, () => {
+                G.soul.vy = 1100; G.soul.ground = false;
+                G.screenShake = 0.35; SFX.boom();
+                spawn(FloorSpikes(0.45, 0.45));
+            });
+        }
+    },
+    // 場地轉換：戰場移到下方的行動選單區域
+    arenaShift: {
+        box: () => [576, 72, 320, 434], dur: () => 4,
+        start(a) {
+            a.at(0.05, () => cast('場地轉換', 0.5));
+            for (let t = 0.3; t < a.dur - 0.6; t += 0.5) a.at(t, () => {
+                const b = tbox();
+                for (let j = 0; j < 3; j++) {
+                    const x = j === 0 ? G.soul.x : rand(b.x + 20, b.x + b.w - 20);
+                    spawn(LineAoE(x, b.y, Math.PI / 2, 34, WARN(0.8), { dmg: 8, silent: j > 0 }));
+                }
+            });
+        }
+    },
+    finale: {   // 絕・萬貓天動的最後一招（約 20 秒）：斜向肉球砲 → 最終肉球光輪（＋小貓兵突進、地火）
+        box: () => [270, 170], dur: () => 20, marker: true,
+        start(a) {
+            // 1. 斜向肉球砲
+            a.at(0.1, () => {
+                cast('最終肉球砲', 1.6);
+                const b = tbox(), c = boxC(), d = Math.atan2(b.h, b.w);
+                [d, -d].forEach((ang, i) => spawn(LineAoE(c.x, c.y, ang, 36, 1.6, { dmg: 12, silent: i > 0 })));
+                G.screenShake = 0.3;
+            });
+            // 2. 最終肉球光輪：長詠唱，越轉越快、中途逆轉
+            const warn = 1.0, life = 15.5, flipAt = 8.0, t0 = 2.0;
+            a.at(t0, () => {
+                const c = boxC();
+                cast('最終肉球光輪', warn + life);
+                spawn(FinaleLaser(c.x, c.y, 3, rand(0, Math.PI * 2), warn, life, flipAt));
+            });
+            // 地火：落在腳下，會留在地上 5 秒（放在不擋路的地方）
+            for (let t = t0 + 2.2; t < t0 + warn + life - 1.2; t += 1.7)
+                a.at(t, () => spawn(Puddle(G.soul.x, G.soul.y, 0.8, 5, 20, 'fire')));
+            // 小貓兵突進：每波 1 隻，後段 2 隻（上一波衝完才出下一波）
+            for (let t = t0 + 1.6, i = 0; t < t0 + warn + life - 1; t += 2.4, i++)
+                a.at(t, () => chargeWave(t > t0 + 9 ? 2 : 1, WARN(1.0), 26));
+        }
+    },
+    enrage: {
+        box: () => [270, 170], dur: () => 99, calm: true,
+        start(a) { startGauntlet(); }
+    }
+};
+
+// 地面刺出的劍（重力摔擊用）
+function FloorSpikes(warn, active) {
+    let t = 0;
+    return {
+        clip: true,
+        update(dt) {
+            t += dt;
+            if (t > warn && t < warn + active) {
+                const b = G.box, h = Math.min(30, (t - warn) / 0.1 * 30);
+                if (G.soul.y + SR > b.y + b.h - h) damage(8);
+            }
+            return t < warn + active + 0.15;
+        },
+        draw() {
+            const b = G.box;
+            if (t < warn) {
+                if (Math.floor(t * 16) % 2) { ctx.fillStyle = RED; ctx.fillRect(b.x + 4, b.y + b.h - 6, b.w - 8, 3); }
+                return;
+            }
+            const k = t - warn, h = k < active ? Math.min(30, k / 0.1 * 30) : Math.max(0, 30 - (k - active) / 0.15 * 30);
+            if (h < 2) return;
+            for (let x = b.x + 6; x < b.x + b.w - 14; x += 16) drawSword(x, b.y + b.h - h, 8, h + 10, true, SWORD_COL.none, null);
+        }
+    };
+}
+
+// =====================================================================
+// 絕・萬貓天動：一口氣跑完所有機制，中間穿插閃回
+// cut: black 突然黑屏 / white 白閃 / flash 回憶閃回（閃過之前的台詞）
+// =====================================================================
+const GAUNTLET = [
+    { k: 'lightDark', d: 3.0 },   { cut: 'black' },
+    { k: 'charges', d: 3.0 },     { cut: 'white' },
+    { k: 'slam', d: 4.3 },        { cut: 'flash' },
+    { k: 'march', d: 3.6 },       { cut: 'black' },
+    { k: 'aoe', d: 2.8 },
+    { talk: ['……呼。', '你……還站著啊。'] },
+    // ↓ 說完話之後：閃回更頻繁，戰場也會轉移到下方的行動選單
+    { cut: 'black' },
+    { k: 'rotLaser', d: 3.2 },    { cut: 'flash' },
+    { k: 'arenaShift', d: 3.5 },  { cut: 'black' },
+    { k: 'exaflare', d: 4.6 },    { cut: 'white' }, { cut: 'black' },
+    { k: 'gaze', d: 3.0 },        { cut: 'flash' },
+    { k: 'chariot', d: 3.0 },     { cut: 'black' },
+    { k: 'arenaShift', d: 3.5 },  { cut: 'white' },
+    { k: 'cross', d: 3.0 },       { cut: 'flash' }, { cut: 'black' },
+    { k: 'tileFall', d: 3.4 },    { cut: 'black' },
+    { k: 'limitCut', d: 6.4 },    { cut: 'white' },
+    { k: 'timeStop', d: 4.6 },    { cut: 'flash' },
+    { k: 'futureMini', d: 8.6 },  { cut: 'white' },
+    { k: 'accelBomb', d: 5.6 },   { cut: 'black' },
+    { k: 'proximity', d: 3.0 },   { cut: 'flash' }, { cut: 'white' },
+    { k: 'knockDynamo', d: 3.4 }, { cut: 'black' },
+    { k: 'arenaShift', d: 3.0 },  { cut: 'black' },
+    { k: 'finale', d: 20.0 }
+];
+const CUT_TIME = { black: 0.35, white: 0.25, flash: 0.7 };
+
+function startGauntlet() {
+    G.gauntlet = { idx: 0 };
+    G.ents = []; G.cast = null;
+    setState('gtitle');
+    G.screenShake = 0.8; SFX.crack();
+}
+function snapBox(w, h, cx, cy) {
+    setBox(w, h, cx, cy);
+    const b = G.box; b.x = b.tx; b.y = b.ty; b.w = b.tw; b.h = b.th;
+}
+function runGauntletStep() {
+    const step = gSteps()[G.gauntlet.idx];
+    G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
+    if (step.k) {
+        snapBox(...AT(step.k).box());
+        G.soul.mode = 'red'; G.soul.x = 320; G.soul.y = G.box.ty + G.box.th / 2;
+        startAttack(step.k, step.d);
+    } else if (step.cut) {
+        setState('cut');
+        G.cut = { type: step.cut, dur: CUT_TIME[step.cut] };
+        if (step.cut === 'flash') {
+            const all = TURNS_1.concat(TURNS_2).map(t => t.line);
+            G.cut.line = pick(all);
+        }
+        if (step.cut === 'black') beep(60, 0.05, 'square', 0.08);
+        if (step.cut === 'white') { G.flash = 0.6; SFX.boom(); }
+        if (step.cut === 'flash') SFX.warn();
+    } else if (step.talk) {
+        G.bossTired = true;   // 喘口氣（震怒路線會換成疲勞的表情）
+        bossSay(step.talk, () => { G.bossTired = false; gauntletNext(); });
+    }
+}
+function gauntletNext() {
+    G.gauntlet.idx++;
+    if (G.gauntlet.idx >= gSteps().length) { G.gauntlet = null; endBossTurn(); return; }
+    runGauntletStep();
+}
+
+function updateAttack(dt) {
+    const a = G.attack;
+    a.t += dt;
+    for (const ev of a.events) if (!ev.done && a.t >= ev.t) { ev.done = true; ev.fn(); if (G.state !== 'attack') return; }
+    updateSoul(dt);
+    if (G.timeStop) G.timeStop.t += dt;
+    if (G.cast) { G.cast.t += dt; if (G.cast.t > G.cast.dur + 0.3) G.cast = null; }
+    // 更新時新產生的物件（例如引導扇形鎖定後產生的扇形）也要保留下來
+    const current = G.ents;
+    G.ents = [];
+    const kept = current.filter(e => e.update(dt) !== false);
+    G.ents = kept.concat(G.ents);
+    if (G.state !== 'attack') return;
+    if (a.t >= a.dur) {
+        if (G.gauntlet) gauntletNext();
+        else if (G.queue && G.queue.length) nextSegment();
+        else endBossTurn();
+    }
+}
+
+// =====================================================================
+// 猜謎秀
+// =====================================================================
+function startQuiz() {
+    let pool = QUIZ.map((q, i) => i).filter(i => !G.quizUsed.includes(i));
+    if (!pool.length) { G.quizUsed = []; pool = QUIZ.map((q, i) => i); }
+    const qi = pool[0];
+    G.quizUsed.push(qi);
+    const q = QUIZ[qi];
+    // 第二階段會打亂選項位置
+    const order = [0, 1, 2, 3];
+    if (HARD()) order.sort(() => Math.random() - 0.5);
+    setState('quiz');
+    G.quizShowing = true;
+    G.quiz = { q, order, t: 0, limit: !HARD() ? 10 : RAGE() ? 6 : 7, chosen: -1, resultT: 0 };
+    G.soul.x = 320; G.soul.y = G.box.ty + G.box.th / 2 + 10;
+    G.lights = 0;
+}
+function quizZones() {
+    const b = G.box, zw = 150, zh = 44, m = 10;
+    return [
+        { x: b.x + m, y: b.y + m + 12, w: zw, h: zh },
+        { x: b.x + b.w - m - zw, y: b.y + m + 12, w: zw, h: zh },
+        { x: b.x + m, y: b.y + b.h - m - zh, w: zw, h: zh },
+        { x: b.x + b.w - m - zw, y: b.y + b.h - m - zh, w: zw, h: zh }
+    ];
+}
+const quizRight = slot => G.quiz.q.answer === -1 || G.quiz.order[slot] === G.quiz.q.answer;
+function updateQuiz(dt) {
+    const Q = G.quiz;
+    G.lights += dt;
+    if (Q.chosen === -1) {
+        Q.t += dt;
+        updateSoul(dt);
+        quizZones().forEach((z, i) => {
+            if (Q.chosen === -1 && G.soul.x > z.x && G.soul.x < z.x + z.w && G.soul.y > z.y && G.soul.y < z.y + z.h) answerQuiz(i);
+        });
+        if (Q.chosen === -1 && Q.t >= Q.limit) answerQuiz(-2);
+    } else {
+        Q.resultT += dt;
+        if (Q.resultT > 0.4 && !Q.said) {
+            Q.said = true;
+            const line = Q.correct
+                ? (Q.q.answer === -1 ? '哼哼，答得好！\n本大爺當然可愛！' : '嘖……答對了。\n算你有做功課。')
+                : (Q.chosen === -2 ? '時間到！\n猶豫就會敗北！' : '噗噗——答錯了！\n乖乖受罰吧！');
+            bossSay([line], endBossTurn);
+        }
+    }
+}
+function answerQuiz(i) {
+    const Q = G.quiz;
+    Q.chosen = i;
+    Q.correct = i >= 0 && quizRight(i);
+    if (Q.correct) SFX.correct();
+    else {
+        SFX.wrong();
+        G.flash = 0.3;
+        // 答錯會被電，但不會因此倒下
+        if (!GOD) G.hp = Math.max(1, G.hp - Math.round(12 * G.DMG));
+        G.soul.inv = 0.6;
+    }
+}
+
+// =====================================================================
+// 主迴圈
+// =====================================================================
+let last = performance.now();
+function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (G) { update(dt); draw(); }
+    pressed.clear();
+    requestAnimationFrame(frame);
+}
+
+function update(dt) {
+    G.t += dt; G.stateT += dt;
+    const duo = G.state === 'attack' && G.attack && AT(G.attack.kind) === ATTACKS.twinBoss && CONFIG.KNIGHT.STAGE === 'top';
+    G.duoK = (G.duoK || 0) + ((duo ? 1 : 0) - (G.duoK || 0)) * Math.min(1, dt * 5);
+    if (hit('mute')) { muted = !muted; if (bgm) bgm.muted = muted; }
+    const b = G.box, k = Math.min(1, dt * 10);
+    b.x += (b.tx - b.x) * k; b.y += (b.ty - b.y) * k; b.w += (b.tw - b.w) * k; b.h += (b.th - b.h) * k;
+    ['shake', 'screenShake', 'flash', 'slash', 'hpBarT'].forEach(key => { if (G[key] > 0) G[key] -= dt; });
+    if (G.dmgText) G.dmgText.t += dt;
+    G.shards.forEach(s => { s.vy += 600 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.r += dt * 6; });
+    G.shards = G.shards.filter(s => s.y < H + 40);
+
+    switch (G.state) {
+        case 'text': updateTyping(G.text, false, dt); break;
+        case 'bossText': updateTyping(G.bubble, true, dt); updateSoul(dt); break;
+        case 'menu': {
+            const n = menuItems().length;
+            if (hit('left')) { G.menuIdx = (G.menuIdx + n - 1) % n; SFX.move(); }
+            if (hit('right')) { G.menuIdx = (G.menuIdx + 1) % n; SFX.move(); }
+            if (hit('ok')) {
+                SFX.select();
+                [startFight, () => openList('act'), () => openList('item'), () => openList('mercy')][G.menuIdx]();
+            }
+            break;
+        }
+        case 'list': {
+            // 兩欄排列：← → 換欄，↑ ↓ 換列
+            const n = G.list.options.length, i = G.listIdx;
+            let j = i;
+            if (hit('left') && i % 2 === 1) j = i - 1;
+            if (hit('right') && i % 2 === 0 && i + 1 < n) j = i + 1;
+            if (hit('up') && i - 2 >= 0) j = i - 2;
+            if (hit('down') && i + 2 < n) j = i + 2;
+            if (j !== i) { G.listIdx = j; SFX.move(); }
+            if (hit('back')) toMenu();
+            else if (hit('ok')) chooseOption(G.list.options[G.listIdx]);
+            break;
+        }
+        case 'combo': updateCombo(dt); break;
+        case 'lbAnim': updateLBAnim(dt); break;
+        case 'fightAnim': if (G.stateT > 1.3) afterFight(); break;
+        case 'attack': updateAttack(dt); break;
+        case 'gtitle':
+            updateSoul(dt);
+            if (G.stateT > 1.8) runGauntletStep();
+            break;
+        case 'cut':
+            if (G.stateT >= G.cut.dur) gauntletNext();
+            break;
+        case 'segment':
+            updateSoul(dt);
+            if (G.stateT > 0.8) startAttack(G.nextKind, segDur(G.nextKind, G.comboTotal));
+            break;
+        case 'quiz': updateQuiz(dt); break;
+        case 'cutin': G.cutin.t += dt; if (G.cutin.t > 0.6) updateTyping(G.cutin, false, dt); break;
+        case 'breaking':
+            if (G.stateT > 0.9 && !G.broke) { G.broke = true; finishBreak(); }
+            break;
+        case 'dead': updateDeath(dt); break;
+    }
+}
+
+function updateDeath(dt) {
+    G.deadT += dt;
+    if (G.deadT < 1.2) return;
+    const lines = G.deathLines;
+    const total = lines.reduce((s, l) => s + l.length, 0);
+    const pause = G.phase === 2 ? 1.6 : 0.4;    // 第二階段在兩句之間停頓久一點
+    const before = Math.floor(G.deathShown);
+    const firstLen = lines[0].length;
+    if (G.deathShown < firstLen || G.deadT > 1.2 + firstLen / 20 + pause) G.deathShown = Math.min(total, G.deathShown + dt * 20);
+    if (Math.floor(G.deathShown) !== before) SFX.text();
+    if (G.deathShown >= total) {
+        G.deathDoneT = (G.deathDoneT || 0) + dt;
+        if (G.phase === 2 && G.deathDoneT > 1.4) { G.deathDoneT = 0; revive(); }
+        if (G.phase === 1 && hit('ok')) { G.deathDoneT = 0; revive(); }
+    }
+}
+
+// =====================================================================
+// 繪圖
+// =====================================================================
+function wrapText(text, maxW) {
+    const out = [];
+    for (const para of text.split('\n')) {
+        let line = '';
+        for (const ch of para) {
+            if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = (para.startsWith('* ') ? '  ' : '') + ch; }
+            else line += ch;
+        }
+        out.push(line);
+    }
+    return out;
+}
+
+// 玩家的「心」：阿謝姆水晶（顏色代表狀態：一般＝水藍、重力＝深藍、石化＝灰、未來的殘影＝紫）
+const CRYSTAL = { base: '#7dd3fc', light: '#e0f7ff', dark: '#0ea5e9', glow: 'rgba(125, 211, 252, 0.9)' };
+const CRYSTAL_MODES = {
+    [BLUE]:  { base: '#2563eb', light: '#93c5fd', dark: '#1e3a8a', glow: 'rgba(37, 99, 235, 0.9)' },
+    stone:   { base: '#9ca3af', light: '#e5e7eb', dark: '#4b5563', glow: 'rgba(156, 163, 175, 0.6)' },
+    vision:  { base: '#a78bfa', light: '#ede9fe', dark: '#6d28d9', glow: 'rgba(167, 139, 250, 0.9)' },
+    ld_light: { base: '#fbbf24', light: '#fef9c3', dark: '#b45309', glow: 'rgba(253, 224, 71, 0.95)' },   // 光之印：金色水晶
+    ld_dark:  { base: '#9333ea', light: '#e9d5ff', dark: '#4c1d95', glow: 'rgba(168, 85, 247, 0.95)' }    // 暗之印：紫色水晶
+};
+function drawHeart(x, y, color = RED, s = 1, half) {
+    const c = CRYSTAL_MODES[color] || CRYSTAL;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const a0 = ctx.globalAlpha;   // 讓外部可以設定透明度（殘影用）
+    if (half) { ctx.beginPath(); ctx.rect(half === 'left' ? -20 : 0, -20, 20, 40); ctx.clip(); }
+    ctx.shadowColor = c.glow; ctx.shadowBlur = 8;
+    // 外形：細長的八面體水晶
+    ctx.beginPath();
+    ctx.moveTo(0, -10); ctx.lineTo(6, -3); ctx.lineTo(4, 6); ctx.lineTo(0, 10); ctx.lineTo(-4, 6); ctx.lineTo(-6, -3); ctx.closePath();
+    ctx.fillStyle = c.base; ctx.fill();
+    ctx.shadowBlur = 0;
+    // 左側亮面、右側暗面
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(-6, -3); ctx.lineTo(-4, 6); ctx.lineTo(0, 10); ctx.lineTo(-1.5, 0); ctx.closePath();
+    ctx.fillStyle = c.light; ctx.globalAlpha = a0 * 0.75; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(6, -3); ctx.lineTo(4, 6); ctx.lineTo(0, 10); ctx.lineTo(1.5, 0); ctx.closePath();
+    ctx.fillStyle = c.dark; ctx.globalAlpha = a0 * 0.55; ctx.fill();
+    ctx.globalAlpha = a0;
+    // 高光
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(-2.5, -5); ctx.lineTo(-1, -7); ctx.lineTo(-1.6, -2); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+function drawSoul() {
+    const s = G.soul;
+    // 凝視機制：水晶前方的小箭頭表示面向
+    if (G.state === 'attack' && G.attack && G.attack.facing) {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.face);
+        ctx.fillStyle = s.stun > 0 ? '#9ca3af' : YELLOW;
+        ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(12, -5); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
+    if (s.inv > 0 && Math.floor(G.t * 16) % 2) return;
+    if (G.vision && G.state === 'attack') ctx.globalAlpha = 0.35;   // 未來觀測中：現在的自己變淡
+    const ld = G.ld && G.state === 'attack' && G.debuffs.some(d => d.kind === 'ld');
+    drawHeart(s.x, s.y, s.stun > 0 ? 'stone' : ld ? 'ld_' + G.ld : s.mode === 'blue' ? BLUE : RED);
+    ctx.globalAlpha = 1;
+    // 數字 debuff（肉球序列）：水晶右上角直接顯示阿拉伯數字
+    const lim = G.state === 'attack' && G.debuffs.find(d => d.kind === 'limit');
+    if (lim) {
+        ctx.font = `900 15px ${FONT}`; ctx.textAlign = 'center';
+        ctx.lineWidth = 3.5; ctx.strokeStyle = '#000'; ctx.strokeText(String(lim.n), s.x + 13, s.y - 7);
+        ctx.fillStyle = '#fff'; ctx.fillText(String(lim.n), s.x + 13, s.y - 7); ctx.textAlign = 'left';
+    }
+}
+
+// 時間停止中：畫面泛藍，旁邊顯示停住的時鐘
+function drawTimeStop() {
+    const T = G.timeStop, b = G.box, rem = Math.max(0, T.dur - T.t);
+    ctx.fillStyle = 'rgba(100, 116, 139, 0.12)'; ctx.fillRect(-20, -20, W + 40, H + 40);
+    const cx = b.x + b.w + 36, cy = b.y + 28;
+    ctx.strokeStyle = '#bfdbfe'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 7); ctx.stroke();
+    for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 12); ctx.lineTo(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - 11); ctx.moveTo(cx, cy); ctx.lineTo(cx + 8, cy + 3); ctx.stroke();
+    ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#bfdbfe'; ctx.textAlign = 'center';
+    ctx.fillText('時間停止', cx, cy + 32); ctx.fillText(rem.toFixed(1) + 's', cx, cy + 47);
+    ctx.textAlign = 'left';
+}
+// 未來觀測中：畫面泛紫＋暗角
+function drawVision() {
+    ctx.fillStyle = 'rgba(76, 29, 149, 0.25)'; ctx.fillRect(-20, -20, W + 40, H + 40);
+    const v = ctx.createRadialGradient(320, 240, 160, 320, 240, 420);
+    v.addColorStop(0, 'rgba(0, 0, 0, 0)'); v.addColorStop(1, 'rgba(20, 0, 40, 0.6)');
+    ctx.fillStyle = v; ctx.fillRect(-20, -20, W + 40, H + 40);
+}
+// 框下方的提示（攻擊開始時的機制說明、未來觀測說明），畫在狀態列上面
+function drawHint() {
+    if (G.state !== 'attack' || !G.attack) return;
+    const A = AT(G.attack.kind);
+    let text = null, color = UI_TEXT, alpha = 1;
+    if (G.vision) { text = G.vision.beta ? '未來觀測β：只看得見未來的自己……記住走位！' : '未來觀測α：記住預兆，還有未來的自己怎麼走！'; color = '#ddd6fe'; }
+    else if (!G.gauntlet && !G.ultimate) {
+        if (A.hint) { text = A.hint; if (G.soul.mode === 'blue') color = BLUE; }
+        else if (G.soul.mode === 'blue') { text = '藍色的水晶：受到重力影響，按 ↑ 跳躍！'; color = BLUE; }
+        // 顯示時間依字數決定（至少 3 秒），最後 0.5 秒淡出
+        if (text) {
+            const dur = Math.max(3, 1 + text.length * 0.1);
+            if (G.attack.t > dur) text = null; else alpha = Math.min(1, (dur - G.attack.t) / 0.5);
+        }
+    }
+    if (!text) return;
+    ctx.save(); ctx.globalAlpha = alpha;
+    const b = G.box, y = Math.min(b.y + b.h + 8, H - 30);
+    ctx.font = `bold 13px ${FONT}`;
+    const w = ctx.measureText(text).width + 24;
+    ctx.fillStyle = UI_PANEL; ctx.beginPath(); ctx.roundRect(320 - w / 2, y, w, 22, 5); ctx.fill();
+    ctx.strokeStyle = UI_GOLD_DARK; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.fillText(text, 320, y + 16); ctx.textAlign = 'left';
+    ctx.restore();
+}
+
+function drawBoss() {
+    ctx.save(); ctx.translate(bossShift(), 0);
+    drawBossInner();
+    ctx.restore();
+}
+function drawBossInner() {
+    if (G.bossGone) return;
+    const rage = G.phase === 2 && G.route === 'rage', play = G.phase === 2 && G.route === 'play';
+    let ox = 0, oy = play ? -Math.abs(Math.sin(G.t * 4)) * 6 : Math.sin(G.t * (rage ? 3.5 : 2)) * 3;
+    if (G.shake > 0) ox = (Math.random() - 0.5) * 14 * G.shake;
+    if (rage) ox += (Math.random() - 0.5) * 1.5;
+    ctx.save();
+    if (G.shake > 0 && Math.floor(G.t * 20) % 2) ctx.globalAlpha = 0.4;
+    const top = 22, maxH = 195;
+    if (rage) {
+        const gl = ctx.createRadialGradient(320, 120, 10, 320, 120, 140);
+        gl.addColorStop(0, 'rgba(255, 40, 60, 0.35)'); gl.addColorStop(1, 'rgba(255, 40, 60, 0)');
+        ctx.fillStyle = gl; ctx.fillRect(170, 0, 300, 240);
+    }
+    const pic = bossPic();
+    if (pic) {
+        const h = maxH, w = pic.width * h / pic.height;
+        ctx.imageSmoothingEnabled = pic.height > 300;   // 像素圖保持銳利，一般插畫則平滑縮放
+        ctx.drawImage(pic, 320 - w / 2 + ox, top + oy, w, h);
+        ctx.imageSmoothingEnabled = true;
+    } else {
+        const px = 10, w = PLACEHOLDER[0].length * px;
+        ctx.fillStyle = '#fff';
+        PLACEHOLDER.forEach((row, r) => [...row].forEach((c, i) => {
+            if (c === '#') ctx.fillRect(320 - w / 2 + i * px + ox, top + 10 + r * px + oy, px, px);
+        }));
+        if (G.phase === 2) {   // 第二階段：眼睛發紅光
+            ctx.fillStyle = RED;
+            ctx.fillRect(320 - w / 2 + 3 * px + ox, top + 10 + 5 * px + oy, px * 2, px * 2);
+            ctx.fillRect(320 - w / 2 + 11 * px + ox, top + 10 + 5 * px + oy, px * 2, px * 2);
+        }
+        ctx.fillStyle = '#000'; ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center';
+        ctx.fillText('立繪待補', 320 + ox, top + 125 + oy); ctx.textAlign = 'left';
+    }
+    ctx.restore();
+    if (play) {   // 享受遊戲中：頭上飄著音符
+        ctx.font = `bold 18px ${FONT}`; ctx.fillStyle = '#f9a8d4';
+        for (let i = 0; i < 3; i++) {
+            const p = (G.t * 0.5 + i / 3) % 1;
+            ctx.globalAlpha = 1 - p;
+            ctx.fillText(i % 2 ? '♪' : '♫', 380 + i * 18 + Math.sin(G.t * 3 + i) * 6, 70 - p * 50);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    if (G.slash > 0) {
+        const p = 1 - G.slash / 0.5;
+        ctx.strokeStyle = RED; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(280, 60 + p * 10); ctx.lineTo(280 + 80 * Math.min(1, p * 2), 60 + 120 * Math.min(1, p * 2)); ctx.stroke();
+    }
+    if (G.hpBarT > 0 || G.state === 'fightAnim' || G.state === 'combo') {
+        const w = 200;
+        ctx.fillStyle = '#404040'; ctx.fillRect(320 - w / 2, 214, w, 12);
+        ctx.fillStyle = G.phase === 2 ? RED : GREEN; ctx.fillRect(320 - w / 2, 214, w * G.bossHp / G.bossMax, 12);
+        const mark = G.phase === 1 ? CONFIG.PHASE2_AT / G.bossMax : G.bossTired ? 0 : CONFIG.ENRAGE_AT;   // 黃線：進入下一階段／絕・萬貓天動的門檻
+        if (mark) { ctx.fillStyle = YELLOW; ctx.fillRect(320 - w / 2 + w * mark - 1, 211, 2, 18); }
+    }
+    if (G.dmgText) {
+        const d = G.dmgText;
+        ctx.font = `bold 28px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = d.color;
+        ctx.fillText(d.text, 320, 200 - Math.min(d.t, 0.3) * 60);
+        if (d.sub) { ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = YELLOW; ctx.fillText(d.sub, 320, 246); }
+        ctx.textAlign = 'left';
+    }
+    if (G.state === 'quiz' || G.quizShowing) {
+        const cols = ['#ff2a55', '#ffd000', '#4ade80', '#38bdf8', '#a855f7'];
+        for (let i = 0; i < 12; i++) {
+            ctx.fillStyle = cols[(i + Math.floor(G.lights * 6)) % cols.length];
+            ctx.fillRect(40 + i * 52, 8, 16, 8);
+        }
+        ctx.font = `bold 20px ${FONT}`; ctx.fillStyle = YELLOW; ctx.textAlign = 'center';
+        ctx.fillText('★ INU 的猜謎秀 ★', 320, 236); ctx.textAlign = 'left';
+    }
+}
+
+function drawSpeech(text, fullText) {
+    ctx.font = `bold 15px ${FONT}`;
+    const lines = wrapText(text, 190), full = wrapText(fullText, 190);
+    const x = 430, y = 40, w = 206, h = 20 + full.length * 22;
+    ctx.fillStyle = '#f4a7ab';   // 對話框：淺紅色
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, y + 20); ctx.lineTo(x - 14, y + 28); ctx.lineTo(x, y + 34); ctx.fill();
+    ctx.fillStyle = '#000';
+    lines.forEach((l, i) => ctx.fillText(l, x + 10, y + 26 + i * 22));
+    return { x, y, w, h };
+}
+function drawBubble() {
+    const bb = G.bubble;
+    if (!bb) return;
+    const full = bb.lines[bb.i];
+    if (full === undefined) return;
+    const r = drawSpeech(full.slice(0, Math.floor(bb.shown)), full);
+    if (bb.shown >= full.length && Math.floor(G.t * 2) % 2) {
+        ctx.font = `12px ${FONT}`; ctx.fillStyle = '#888'; ctx.textAlign = 'right';
+        ctx.fillText('▼ Z', r.x + r.w - 8, r.y + r.h - 6); ctx.textAlign = 'left';
+    }
+}
+
+function drawCast() {
+    const c = G.cast;
+    if (!c) return;
+    const w = 240, x = 320 - w / 2, y = G.box.y - 26;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(x - 4, y - 16, w + 8, 26);
+    ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.fillText(`${CONFIG.BOSS_NAME} 詠唱中：${c.name}`, 320, y - 2); ctx.textAlign = 'left';
+    ctx.fillStyle = '#333'; ctx.fillRect(x, y + 3, w, 5);
+    ctx.fillStyle = G.phase === 2 ? RED : ORANGE; ctx.fillRect(x, y + 3, w * Math.min(1, c.t / c.dur), 5);
+}
+
+// FF14 風格的 debuff 圖示（框的左上方）
+function drawDebuffs() {
+    if (!G.debuffs || !G.debuffs.length || !['attack', 'segment'].includes(G.state)) return;
+    G.debuffs.filter(d => !d.hidden).forEach((d, i) => {
+        const x = 24, y = G.box.y + G.box.h - 34 - i * 40;   // 框的左下方
+        ctx.fillStyle = d.color || '#7c3aed'; ctx.fillRect(x, y, 30, 30);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x, y, 30, 30);
+        ctx.fillStyle = '#fff'; ctx.font = `bold 20px ${FONT}`; ctx.textAlign = 'center';
+        ctx.fillText(d.num, x + 15, y + 23);
+        ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'left';
+        ctx.fillText(d.label, x + 34, y + 12);
+        if (d.timer !== undefined) { ctx.fillStyle = d.timer < 1.5 ? RED : YELLOW; ctx.fillText(Math.max(0, d.timer).toFixed(1) + 's', x + 34, y + 27); }
+    });
+}
+// 延遲詠唱：記住的機制清單（框的左邊）
+const SHOW_DELAYED_LIST = false;   // 延遲詠唱：要不要在左邊顯示已記住的機制（false = 只能自己記）
+function drawDelayed() {
+    if (!SHOW_DELAYED_LIST) return;
+    if (!G.delayed || !G.delayed.length || G.state !== 'attack') return;
+    const x = 24, y0 = G.box.y + 4;
+    ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = '#c4b5fd';
+    ctx.fillText('延遲詠唱', x, y0 + 10);
+    G.delayed.forEach((d, i) => {
+        const y = y0 + 34 + i * 24;
+        ctx.fillStyle = d.done ? '#555' : (d.next ? YELLOW : '#fff');
+        ctx.fillText(`${i + 1}. ${d.hidden && !d.done ? '？？？' : d.name}${d.done ? ' ✓' : ''}`, x, y);
+    });
+}
+
+function drawPawMark(x, y, s = 1, color = 'rgba(255,255,255,0.5)') {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.ellipse(x, y + 3 * s, 7 * s, 6 * s, 0, 0, 7); ctx.fill();
+    [[-8, -4], [-3, -9], [3, -9], [8, -4]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.ellipse(x + dx * s, y + dy * s, 2.6 * s, 3.2 * s, 0, 0, 7); ctx.fill(); });
+}
+
+function drawBox() {
+    const b = G.box;
+    // 外框：金色雙線、圓角
+    ctx.strokeStyle = UI_GOLD; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 6); ctx.stroke();
+    ctx.strokeStyle = UI_GOLD_DARK; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(b.x + 4, b.y + 4, b.w - 8, b.h - 8, 4); ctx.stroke();
+    // 四個角的小裝飾
+    ctx.fillStyle = UI_GOLD;
+    [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill();
+    });
+}
+
+function drawEnts(under) {
+    const b = G.box;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(b.x + 2, b.y + 2, b.w - 4, b.h - 4); ctx.clip();
+    G.ents.forEach(e => { if (e.clip && !!e.under === under) e.draw(); });
+    ctx.restore();
+    if (!under) G.ents.forEach(e => { if (!e.clip) e.draw(); });
+}
+
+function drawBoxText() {
+    const b = G.box;
+    ctx.font = `17px ${FONT}`; ctx.fillStyle = '#fff';
+    if ((G.state === 'text' || G.state === 'menu') && G.text) {
+        const tx = G.text, full = tx.lines[Math.min(tx.i, tx.lines.length - 1)];
+        wrapText(full.slice(0, Math.floor(tx.shown)), b.w - 50).forEach((l, i) => ctx.fillText(l, b.x + 24, b.y + 34 + i * 28));
+    }
+    if (G.state === 'list') {
+        const pos = i => ({ x: b.x + 60 + (i % 2) * 260, y: b.y + 36 + Math.floor(i / 2) * 32 });
+        G.list.options.forEach((o, i) => {
+            ctx.fillStyle = o.yellow ? YELLOW : '#fff';
+            const p = pos(i); ctx.fillText(o.label, p.x, p.y);
+        });
+        const hp = pos(G.listIdx); drawHeart(hp.x - 20, hp.y - 6);
+    }
+    // 操作提示
+    ctx.font = `13px ${FONT}`; ctx.fillStyle = '#888'; ctx.textAlign = 'right';
+    const hy = b.y + b.h - 12, hx = b.x + b.w - 14;
+    if (G.state === 'text' && G.text && G.text.shown >= (G.text.lines[G.text.i] || '').length && Math.floor(G.t * 2) % 2) { ctx.fillStyle = YELLOW; ctx.fillText('▼ 按 Z 繼續', hx, hy); }
+    if (G.state === 'menu') ctx.fillText('← → 選擇　Z 確認', hx, hy);
+    if (G.state === 'list') ctx.fillText('方向鍵選擇　Z 確認　X 返回', hx, hy);
+    if (G.state === 'combo') ctx.fillText('Z 或 1／2／3 出招', hx, hy);
+    ctx.textAlign = 'left';
+
+    if (G.state === 'combo' && G.combo) drawCombo();
+}
+
+// 連擊：戰鬥框裡的技能列（公共冷卻轉圈＋下一招的金色流動邊框）
+function drawCombo() {
+    const C = G.combo, CB = CONFIG.COMBAT, b = G.box;
+    const slotX = i => b.x + b.w / 2 + (i - 1) * 84, cy = b.y + 72, s = 54;
+    // 提示
+    ctx.textAlign = 'center'; ctx.font = `bold 15px ${FONT}`;
+    if (!C.endAt) {
+        ctx.fillStyle = YELLOW; ctx.fillText(`按 ${C.step + 1}：${CB.SKILLS[C.step].name}`, b.x + b.w / 2, b.y + 26);
+    } else {
+        ctx.fillStyle = C.allPerfect ? YELLOW : UI_TEXT;
+        ctx.fillText(`${C.results.join(' → ')}　總傷害 ${C.total}`, b.x + b.w / 2, b.y + 26);
+    }
+    ctx.textAlign = 'left';
+    for (let i = 0; i < 3; i++) {
+        const x = slotX(i), sk = CB.SKILLS[i];
+        const g = ctx.createLinearGradient(x - s / 2, cy - s / 2, x + s / 2, cy + s / 2);
+        g.addColorStop(0, sk.hue); g.addColorStop(1, '#111827');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - s / 2, cy - s / 2, s, s, 6); ctx.fill();
+        // 圖示：劍（王權劍多一頂王冠）
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x - 14, cy + 14); ctx.lineTo(x + 12, cy - 12); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - 12, cy + 5); ctx.lineTo(x - 5, cy + 12); ctx.stroke();
+        if (i >= 1) { ctx.beginPath(); ctx.moveTo(x - 2, cy + 16); ctx.lineTo(x + 16, cy - 2); ctx.stroke(); }
+        if (i === 2) {
+            ctx.fillStyle = '#fde68a'; ctx.beginPath();
+            ctx.moveTo(x - 10, cy - 8); ctx.lineTo(x - 10, cy - 17); ctx.lineTo(x - 5, cy - 12); ctx.lineTo(x, cy - 19);
+            ctx.lineTo(x + 5, cy - 12); ctx.lineTo(x + 10, cy - 17); ctx.lineTo(x + 10, cy - 8); ctx.closePath(); ctx.fill();
+        }
+        ctx.lineCap = 'butt';
+        // 公共冷卻：暗色轉圈
+        if (C.gcd < CB.GCD && !C.endAt) {
+            const p = C.gcd / CB.GCD;
+            ctx.save(); ctx.beginPath(); ctx.roundRect(x - s / 2, cy - s / 2, s, s, 6); ctx.clip();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.62)'; ctx.beginPath(); ctx.moveTo(x, cy);
+            ctx.arc(x, cy, s, -Math.PI / 2 + p * Math.PI * 2, Math.PI * 1.5); ctx.closePath(); ctx.fill();
+            ctx.restore();
+            if (C.queued && C.step === i) { ctx.strokeStyle = C.queued.grade === '太早' ? '#9ca3af' : '#a3e635'; ctx.lineWidth = 3; ctx.strokeRect(x - s / 2 + 3, cy - s / 2 + 3, s - 6, s - 6); }
+        }
+        const next = !C.endAt && C.step === i;
+        ctx.strokeStyle = next ? YELLOW : UI_GOLD_DARK; ctx.lineWidth = next ? 3 : 1.5;
+        if (next) { ctx.setLineDash([8, 6]); ctx.lineDashOffset = -G.t * 40; }
+        ctx.beginPath(); ctx.roundRect(x - s / 2 - 2, cy - s / 2 - 2, s + 4, s + 4, 7); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText(String(i + 1), x - s / 2 + 5, cy - s / 2 + 14);
+        ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = next ? YELLOW : UI_TEXT; ctx.textAlign = 'center';
+        ctx.fillText(sk.name, x, cy + s / 2 + 17); ctx.textAlign = 'left';
+    }
+    // 判定文字
+    C.floats.forEach(f => {
+        ctx.globalAlpha = Math.max(0, 1 - f.t / 0.9);
+        ctx.font = `900 15px ${FONT}`; ctx.textAlign = 'center';
+        const x = slotX(f.slot), y = cy - s / 2 - 8 - f.t * 18;
+        ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(f.text, x, y);
+        ctx.fillStyle = f.color; ctx.fillText(f.text, x, y);
+        ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    });
+    // 第一招前的說明
+    if (C.step === 0 && !C.endAt) {
+        ctx.font = `12px ${FONT}`; ctx.fillStyle = '#a8987a';
+        ctx.fillText('轉圈快轉完時按下（太早按傷害會變低；轉完沒按就超時）', b.x + 16, b.y + b.h - 12);
+    }
+}
+
+// 極限技量表：畫面右上角（FF14 的 LB 條）
+function drawLBGauge() {
+    if (!G || ['done'].includes(G.state)) return;
+    const x = 470, y = 8, lv = lbLevel();
+    ctx.font = `bold 11px ${FONT}`; ctx.fillStyle = lv ? '#fde68a' : '#a8987a'; ctx.textAlign = 'right';
+    ctx.fillText(lv ? `LB${lv} 可用` : '極限技', x - 6, y + 10); ctx.textAlign = 'left';
+    for (let i = 0; i < 3; i++) {
+        const bx = x + i * 52, fill = Math.max(0, Math.min(1, (G.lb || 0) - i)), full = fill >= 1 - 1e-9, locked = i === 2 && G.lb3Used;
+        ctx.fillStyle = '#2a2117'; ctx.fillRect(bx, y, 46, 10);
+        const g = ctx.createLinearGradient(bx, y, bx, y + 10);
+        g.addColorStop(0, locked ? '#9ca3af' : full ? '#fde68a' : '#93c5fd'); g.addColorStop(1, locked ? '#4b5563' : full ? '#d97706' : '#2563eb');
+        ctx.fillStyle = g; ctx.fillRect(bx, y, 46 * fill, 10);
+        if (full && !locked) { ctx.strokeStyle = `rgba(253, 230, 138, ${0.5 + 0.4 * Math.sin(G.t * 5 + i)})`; ctx.lineWidth = 2; ctx.strokeRect(bx - 1, y - 1, 48, 12); }
+        else { ctx.strokeStyle = UI_GOLD_DARK; ctx.lineWidth = 1; ctx.strokeRect(bx - 0.5, y - 0.5, 47, 11); }
+    }
+}
+// LB3 演出
+function drawLBAnim() {
+    const A = G.lbAnim; if (!A) return;
+    const k = Math.min(1, A.t / 0.4);
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.72 * k})`; ctx.fillRect(-20, -20, W + 40, H + 40);
+    ctx.save(); ctx.translate(320, 250); ctx.rotate(-0.1);
+    ctx.fillStyle = 'rgba(217, 119, 6, 0.32)'; ctx.fillRect(-420 + (1 - k) * -650, -52, 840, 104);
+    ctx.restore();
+    ctx.textAlign = 'center'; ctx.globalAlpha = k;
+    ctx.font = `900 18px ${FONT}`; ctx.fillStyle = '#fde68a'; ctx.fillText('極限技 LB3', 320, 226);
+    ctx.font = `900 40px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText(CONFIG.COMBAT.LB[3].name, 320, 272);
+    ctx.globalAlpha = 1; ctx.textAlign = 'left';
+    if (A.t > 1.1 && A.t < 1.6) {
+        const p = (A.t - 1.1) / 0.5;
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 12;
+        for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(180 + i * 40, 20); ctx.lineTo(180 + i * 40 + 300 * p, 20 + 180 * p); ctx.stroke(); }
+    }
+}
+
+function drawQuiz() {
+    const Q = G.quiz, b = G.box;
+    const rem = Q.chosen !== -1 ? 0 : Math.max(0, 1 - Q.t / Q.limit);
+    ctx.fillStyle = '#333'; ctx.fillRect(b.x + 10, b.y + 8, b.w - 20, 8);
+    ctx.fillStyle = rem > 0.3 ? YELLOW : RED; ctx.fillRect(b.x + 10, b.y + 8, (b.w - 20) * rem, 8);
+    if (!G.bubble) drawSpeech(Q.q.q, Q.q.q);
+    quizZones().forEach((z, i) => {
+        let col = '#fff';
+        if (Q.chosen !== -1) col = quizRight(i) ? GREEN : (i === Q.chosen ? RED : '#555');
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(z.x, z.y, z.w, z.h);
+        ctx.fillStyle = col; ctx.font = `bold 15px ${FONT}`; ctx.textAlign = 'center';
+        ctx.fillText(`${'ABCD'[i]}. ${Q.q.options[Q.order[i]]}`, z.x + z.w / 2, z.y + z.h / 2 + 5);
+        ctx.textAlign = 'left';
+    });
+    if (Q.chosen !== -1 && !Q.correct && Q.resultT < 0.4) {
+        ctx.strokeStyle = YELLOW; ctx.lineWidth = 2; ctx.beginPath();
+        let x = G.soul.x, y = b.y; ctx.moveTo(x, y);
+        while (y < G.soul.y) { y += 12; x += rand(-10, 10); ctx.lineTo(x, y); }
+        ctx.stroke();
+    }
+}
+
+function drawHUD() {
+    ctx.font = `bold 16px ${FONT}`; ctx.fillStyle = UI_TEXT;
+    ctx.fillText('光之戰士', 34, 418);
+    ctx.fillText('LV 100', 130, 418);
+    ctx.fillText('HP', 220, 418);
+    // HP 條：FF14 風格的綠色漸層
+    const max = CONFIG.PLAYER_HP, scale = 120 / max, ratio = Math.max(0, G.hp) / max;
+    ctx.fillStyle = '#1a1424'; ctx.beginPath(); ctx.roundRect(249, 405, max * scale + 2, 14, 7); ctx.fill();
+    const hpGrad = ctx.createLinearGradient(0, 405, 0, 419);
+    if (ratio > 0.3) { hpGrad.addColorStop(0, '#b9f6a8'); hpGrad.addColorStop(1, '#3fa34d'); }
+    else { hpGrad.addColorStop(0, '#ffb4a8'); hpGrad.addColorStop(1, '#c0392b'); }
+    ctx.fillStyle = hpGrad; ctx.beginPath(); ctx.roundRect(250, 406, Math.max(0, G.hp) * scale, 12, 6); ctx.fill();
+    ctx.strokeStyle = UI_GOLD_DARK; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(249, 405, max * scale + 2, 14, 7); ctx.stroke();
+    ctx.fillStyle = UI_TEXT; ctx.fillText(`${G.hp} / ${max}`, 380, 418);
+    // 焦糖布丁：回血中的提示，以及回血時跳出的數字
+    if (G.hot && G.hot.turns > 0) { ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#86efac'; ctx.fillText(`布丁回復 ×${G.hot.turns}`, 440, 417); }
+    if (G.hpPop) {
+        G.hpPop.t += 1 / 60;
+        if (G.hpPop.t > 1.2) G.hpPop = null;
+        else { ctx.globalAlpha = Math.max(0, 1 - G.hpPop.t / 1.2); ctx.font = `900 16px ${FONT}`; ctx.fillStyle = '#86efac'; ctx.fillText(G.hpPop.text, 380, 398 - G.hpPop.t * 16); ctx.globalAlpha = 1; }
+    }
+
+    const items = menuItems();
+    ['戰鬥', '行動', '道具', '感化'].forEach((m, i) => {
+        if (i >= items.length) return;
+        if (i === 3 && G.state === 'breaking' && G.stateT > 0.9) return;
+        const x = 32 + i * 148, y = 432, w = 132, h = 38;
+        const sel = G.state === 'menu' && G.menuIdx === i;
+        const ready = i === 3 && G.mercyReady;
+        // 破碎前的裂痕
+        let ox = 0;
+        if (i === 3 && G.state === 'breaking') ox = (Math.random() - 0.5) * 6 * G.stateT;
+        // 按鈕：深色底＋金框；選取中發出水晶藍光；可以感化時發出金光
+        ctx.save();
+        if (sel || ready) { ctx.shadowColor = sel ? UI_SELECT : YELLOW; ctx.shadowBlur = 12; }
+        ctx.fillStyle = UI_PANEL; ctx.beginPath(); ctx.roundRect(x + ox, y, w, h, 6); ctx.fill();
+        ctx.strokeStyle = sel ? UI_SELECT : ready ? YELLOW : UI_GOLD; ctx.lineWidth = sel ? 2.5 : 2;
+        ctx.beginPath(); ctx.roundRect(x + ox, y, w, h, 6); ctx.stroke();
+        ctx.restore();
+        const icon = ['⚔', '✦', '❖', '♥'][i];
+        ctx.fillStyle = sel ? '#fff' : ready ? YELLOW : UI_TEXT; ctx.font = `bold 17px ${FONT}`; ctx.textAlign = 'center';
+        ctx.fillText(sel ? m : `${icon} ${m}`, x + w / 2 + (sel ? 10 : 0) + ox, y + 25); ctx.textAlign = 'left';
+        if (sel) drawHeart(x + 22, y + 19);
+        if (i === 3 && G.state === 'breaking') {
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
+            ctx.moveTo(x + 40 + ox, y); ctx.lineTo(x + 60 + ox, y + 18); ctx.lineTo(x + 52 + ox, y + 38);
+            ctx.moveTo(x + 60 + ox, y + 18); ctx.lineTo(x + 95 + ox, y + 14); ctx.stroke();
+        }
+    });
+    // 打碎按鈕的爪擊
+    if (G.state === 'breaking' && G.stateT < 0.9) {
+        const p = Math.min(1, G.stateT / 0.5), x = 32 + 3 * 148 + 66;
+        ctx.strokeStyle = RED; ctx.lineWidth = 3;
+        for (let j = -1; j <= 1; j++) {
+            ctx.beginPath(); ctx.moveTo(x - 50 + j * 14, 400); ctx.lineTo(x - 50 + j * 14 + 100 * p, 400 + 80 * p); ctx.stroke();
+        }
+    }
+    G.shards.forEach(s => {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.r);
+        ctx.fillStyle = UI_GOLD; ctx.fillRect(-s.w / 2, -s.h / 2, s.w, s.h);
+        ctx.restore();
+    });
+    if (G.phase === 2) {
+        ctx.font = `bold 12px ${FONT}`;
+        ctx.fillStyle = G.route === 'rage' ? RED : '#f9a8d4';
+        ctx.fillText(G.route === 'rage' ? 'PHASE 2 ・ 震怒' : 'PHASE 2', 530, 418);
+    }
+    if (muted) { ctx.font = `12px ${FONT}`; ctx.fillStyle = '#666'; ctx.fillText('🔇 靜音（M）', 560, 20); }
+    if (volShowT > 0) {
+        volShowT -= 1 / 60;
+        ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#ccc'; ctx.textAlign = 'right';
+        ctx.fillText(`♪ 音樂音量 ${Math.round(musicVol * 100)}%`, 632, 40); ctx.textAlign = 'left';
+    }
+    if (GOD) {
+        const list = turnList();
+        ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#4ade80';
+        ctx.fillText(`★ 無敵模式　下一回合：第 ${G.turn % list.length + 1} 回合（${currentTurn().kinds.join(' → ')}）`, 8, 18);
+        ctx.fillStyle = '#888'; ctx.font = `11px ${FONT}`;
+        ctx.fillText('N 跳過攻擊　J 選回合　H 補血　K 進震怒　L 進遊戲', 8, 34);
+    }
+}
+
+function drawDeath() {
+    const t = G.deadT;
+    if (t < 0.9) {
+        if (t <= 0.45) drawHeart(G.soul.x, G.soul.y, RED);
+        else {   // 水晶碎成兩半
+            drawHeart(G.soul.x - 5, G.soul.y + 1, RED, 1, 'left');
+            drawHeart(G.soul.x + 5, G.soul.y + 3, RED, 1, 'right');
+        }
+        return;
+    }
+    ctx.textAlign = 'center';
+    if (G.phase === 1) { ctx.font = `bold 44px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText('GAME OVER', 320, 160); }
+    ctx.font = `18px ${FONT}`; ctx.fillStyle = '#fff';
+    let left = Math.floor(G.deathShown);
+    G.deathLines.forEach((l, i) => {
+        const part = l.slice(0, Math.max(0, left)); left -= l.length;
+        ctx.fillText(part, 320, (G.phase === 1 ? 250 : 220) + i * 40);
+    });
+    const total = G.deathLines.reduce((s, l) => s + l.length, 0);
+    if (G.phase === 1 && G.deathShown >= total) { ctx.fillStyle = YELLOW; ctx.fillText('按 Z 重新挑戰', 320, 360); }
+    if (G.phase === 2 && G.deathShown >= total) drawHeart(320, 330 - Math.min(1, G.deathDoneT || 0) * 8, RED, 1.4);
+    ctx.textAlign = 'left';
+}
+
+function draw() {
+    ctx.save();
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    if (G.state === 'dead') { drawDeath(); ctx.restore(); return; }
+    if (G.state === 'cut' && G.cut.type === 'black') {   // 突然黑屏：只剩下心
+        drawHeart(G.soul.x, G.soul.y, G.soul.mode === 'blue' ? BLUE : RED);
+        ctx.restore(); return;
+    }
+    if (G.screenShake > 0) ctx.translate((Math.random() - 0.5) * 10 * G.screenShake, (Math.random() - 0.5) * 10 * G.screenShake);
+    if (G.phase === 2 && G.route === 'rage') {
+        const v = ctx.createRadialGradient(320, 240, 200, 320, 240, 420);
+        v.addColorStop(0, 'rgba(120,0,20,0)'); v.addColorStop(1, 'rgba(120,0,20,0.35)');
+        ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    }
+    drawBoss();
+    drawKnightStage();
+    if (G.attack && AT(G.attack.kind).marker && G.state === 'attack') {
+        const b = G.box; drawPawMark(b.x + b.w / 2, b.y + b.h / 2, 1.2);
+    }
+    if (G.state === 'attack' && G.timeStop) drawTimeStop();
+    if (G.state === 'attack' && G.vision) drawVision();
+    drawEnts(true);
+    drawBox();
+    drawEnts(false);
+    if (G.state === 'quiz' || G.quizShowing) drawQuiz();
+    drawBoxText();
+    drawCast();
+    drawDebuffs();
+    drawDelayed();
+    drawBubble();
+    drawHUD();
+    drawHint();
+    if (['attack', 'quiz', 'bossText', 'segment', 'gtitle', 'cut'].includes(G.state)) drawSoul();
+    if (G.gauntlet && G.state === 'attack') {
+        const total = gSteps().filter(x => x.k).length;
+        const done = gSteps().slice(0, G.gauntlet.idx + 1).filter(x => x.k).length;
+        ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = RED; ctx.textAlign = 'right';
+        ctx.fillText(`絕・萬貓天動 ${done} / ${total}`, G.box.x + G.box.w, G.box.y - 6); ctx.textAlign = 'left';
+    } else if ((G.state === 'segment' || G.state === 'attack') && G.comboTotal > 1) {
+        ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = YELLOW; ctx.textAlign = 'right';
+        ctx.fillText(`連續技 ${G.comboIdx} / ${G.comboTotal}`, G.box.x + G.box.w, G.box.y - 6); ctx.textAlign = 'left';
+    }
+    if (G.state === 'cut' && G.cut.type === 'flash') {     // 回憶閃回
+        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(-20, -20, W + 40, H + 40);
+        for (let i = 0; i < 6; i++) {
+            ctx.fillStyle = `rgba(255,255,255,${rand(0.03, 0.12)})`;
+            ctx.fillRect(0, rand(0, H), W, rand(2, 10));
+        }
+        ctx.globalAlpha = 0.85;
+        const r = drawSpeech(G.cut.line, G.cut.line);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(80,80,80,0.35)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+    if (G.state === 'gtitle') {
+        ctx.fillStyle = `rgba(0,0,0,${Math.min(0.7, G.stateT)})`; ctx.fillRect(-20, -20, W + 40, H + 40);
+        ctx.save();
+        ctx.translate(320 + rand(-3, 3), 230 + rand(-3, 3));
+        ctx.scale(1 + Math.max(0, 0.4 - G.stateT), 1 + Math.max(0, 0.4 - G.stateT));
+        ctx.font = `900 48px ${FONT}`; ctx.textAlign = 'center';
+        ctx.fillStyle = RED; ctx.fillText('絕・萬貓天動', 3, 3);
+        ctx.fillStyle = '#fff'; ctx.fillText('絕・萬貓天動', 0, 0);
+        ctx.font = `bold 16px ${FONT}`; ctx.fillStyle = '#aaa';
+        ctx.fillText('— 所有的力量，一口氣 —', 0, 40);
+        ctx.restore();
+    }
+    if (G.state === 'cutin') drawCutin();
+    if (G.state === 'lbAnim') drawLBAnim();
+    drawLBGauge();
+    if (G.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${G.flash})`; ctx.fillRect(-20, -20, W + 40, H + 40); }
+    ctx.restore();
+}
+
+// =====================================================================
+// 入口驗證
+// =====================================================================
+const $ = id => document.getElementById(id);
+function gateError(msg) { $('gateErr').textContent = msg; }
+
+$('enterBtn').addEventListener('click', () => {
+    const code = $('codeInput').value.trim().toUpperCase();
+    const key = $('keyInput').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)) return gateError('請輸入 4 碼的魔書契約碼。');
+    if (key !== CONFIG.BATTLE_KEY.toUpperCase()) return gateError('鑰匙不對……大門紋風不動。');
+    const go = () => {
+        playerCode = code;
+        $('gate').classList.remove('show');
+        initAudio();
+        startTime = Date.now();
+        newBattle();
+    };
+    if (!CONFIG.REQUIRE_STAMP) return go();
+    $('enterBtn').disabled = true;
+    gateError('');
+    fetch(`${API_URL}?action=get_stamps&code=${encodeURIComponent(code)}`)
+        .then(r => r.json())
+        .then(d => {
+            if (d.status !== 'success') return gateError('查無此契約碼。');
+            if (!d.stamps.map(Number).includes(CONFIG.REQUIRE_STAMP)) return gateError('你還沒有通過魔王城入口的考驗。');
+            go();
+        })
+        .catch(() => gateError('魔力傳輸中斷，請檢查網路後再試。'))
+        .finally(() => { $('enterBtn').disabled = false; });
+});
+['codeInput', 'keyInput'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('enterBtn').click(); }));
+$('againBtn').addEventListener('click', () => {
+    $('victory').classList.remove('show');
+    startTime = Date.now();
+    newBattle();
+});
+$('ultBtn').addEventListener('click', () => {
+    $('victory').classList.remove('show');
+    startTime = Date.now();
+    newBattle(true);
+});
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

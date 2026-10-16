@@ -25,6 +25,7 @@
         background: #14101c; color: #efe3c4; border: 2px solid #c9a86a; border-radius: 6px; cursor: pointer; font-family: inherit; }
     .panel button:hover, .panel button:focus-visible { color: #fff; border-color: #7dd3fc; box-shadow: 0 0 12px rgba(125, 211, 252, 0.5); outline: none; }
     .panel button:disabled { opacity: 0.5; cursor: wait; }
+    .panel .win-extra { margin: 18px 0 0; font-size: 0.85rem; color: #b8a888; }
     .panel button.ult { margin-top: 12px; font-size: 1rem; color: #ffb4c2; border-color: #ff4b6e; background: #1c0b12; }
     .panel button.ult:hover, .panel button.ult:focus-visible { color: #fff; border-color: #ff4b6e; box-shadow: 0 0 14px rgba(255, 75, 110, 0.6); }
     .err { color: #ff4b6e; min-height: 1.4em; margin-top: 12px; font-size: 0.95rem; }
@@ -75,6 +76,8 @@
             感謝每一位陪 INU 玩到最後的光之戰士 🐾
         </div>
         <button id="againBtn">再挑戰一次</button>
+        <p class="win-extra" id="winExtra">想挑戰更難的嗎？（以下為純挑戰，不計入獎勵）</p>
+        <button id="fullBtn" class="ult">挑戰完整版（全部機制・真・震怒）</button>
         <button id="ultBtn" class="ult">太簡單？來試試絕難度吧</button>
     </div>
 </div>
@@ -112,6 +115,8 @@ const CONFIG = {
     ENRAGE_AT: 0.2,                      // 第二階段血量剩這個比例以下 → 下一回合直接放絕・萬貓天動
     ENRAGE_BLOCKS: 3,                    // 機制還沒跑完就要打到 20% 時，INU 會擋下攻擊；最多擋這麼多次，之後就直接進絕・萬貓天動
     SEE_ALL_MECHANICS: true,             // true：每個階段的機制全部出現過之前，INU 會硬撐著不倒（血量停在門檻上）
+    REVIVES: 3,                          // 第二階段的「光之加護」次數：死掉時滿血從同一回合繼續（絕・萬貓天動從第一段重來）
+    REVIVE_REFRESH: true,                // 光之加護用完又死掉 → 回到第二階段開頭；true＝重來時光之加護恢復成滿的
     MERCY_BREAK_AT: 80,                  // 第一階段感化值達到這裡後嘗試感化 → INU 打碎感化按鈕（遊戲）
     // ⭐️ 守門騎士・倒頭（另一關的關主，第二階段中途加入 INU 一起戰鬥）
     KNIGHT: {
@@ -175,12 +180,23 @@ const CONFIG = {
         TURNS: 18,                       // 回合數（最後一回合是絕・萬貓天動）
         GAUNTLET_STEPS: 30,              // 絕・萬貓天動的機制數
         HITBOX: 1,                       // 水晶的判定半徑（一般是 4；絕難度只剩中心一點）
+        REVIVES: 1,                      // 絕難度的光之加護次數
         SLOW: 0.5                        // 按住 Shift 時的移動速度倍率
     }
 };
 // 難度：D 越大，攻擊越快越密、預兆越短；DMG 是傷害倍率
+// ⭐️ 正式版（約 8 分鐘、計入獎勵）：血量、感化門檻、第二階段難度都比完整版低
+const SHORT = {
+    BOSS_HP: 300, PHASE2_AT: 160,        // 第一階段：打掉 140 進第二階段（約 7 回合）
+    PHASE2_HP: 200,                      // 第二階段（打到 20% 就放絕・萬貓天動）
+    MERCY_BREAK_AT: 60,                  // 感化：約 6 回合
+    DIFFICULTY: { play: { D: 1.6, DMG: 1.2 }, rage: { D: 2.1, DMG: 1.5 } }   // 第二階段：兩條路線都不會出現小貓砲騷擾
+};
+const isFull = () => !!(G && (G.full || G.ultimate));       // 完整版／絕難度
+const CFG = () => isFull() ? CONFIG : { ...CONFIG, ...SHORT };
+const diffOf = route => isFull() ? DIFFICULTY[route] : SHORT.DIFFICULTY[route];
 const DIFFICULTY = {
-    phase1: { D: 1.0, DMG: 1.0 },
+    phase1: { D: 0.75, DMG: 1.0 },      // 第一階段＝普通難度：預兆和詠唱比較慢
     play:   { D: 1.9, DMG: 1.5 },        // 感化路線進入第二階段：魔王在「享受遊戲」
     rage:   { D: 2.9, DMG: 2.2 }         // 戰鬥路線進入第二階段：魔王震怒（還會加上小貓砲騷擾）
 };
@@ -190,29 +206,72 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzhmLK2BTTQQ4hej4SHwhzO
 
 // attack 可以是一個攻擊，或是一串攻擊（連續技，一個接一個不回到選單）
 const TURNS_1 = [
-    { line: '看清楚地上的預兆，\n光之戰士！', attack: 'aoe' },
-    { line: '光與暗——\n站到跟你一樣顏色的地方！', attack: 'lightDark' },
-    { line: '本大爺的爪子瞄準你了！\n引導完就快逃！', attack: 'baitCone' },
+    // 第一階段＝普通難度：一回合介紹一種機制，台詞直接說怎麼躲（第二階段都是這些機制的變奏）
+    { line: '看到地上的橘色預兆了嗎？\n站在上面可是會被炸飛的！', attack: 'aoe' },
+    { line: '鋼鐵要遠離中心，\n月環要靠近中心——記住了！', attack: 'chariot' },
+    { line: '光與暗——\n站到跟你水晶一樣顏色的地方！', attack: 'lightDark' },
+    { line: '小貓兵，衝鋒！\n別站在牠們衝過來的直線上！', attack: 'charges' },
+    { line: '本大爺的爪子會朝你揮過去，\n引導完就快逃！', attack: 'baitCone' },
+    { line: '看到塔就要踩進去！\n一座都不准漏！', attack: 'towers' },
+    { line: '看著本大爺的眼睛……\n不，千萬別看！要背對我！', attack: 'gaze' },
     { line: '來玩點不一樣的——\nINU 的猜謎秀，開始！', attack: 'quiz' },
-    { line: '小貓兵，衝鋒！\n別站在牠們的路上！', attack: 'charges' },
-    { line: '感受重力吧！\n光與暗的劍，分得清楚嗎？', attack: 'gravity' },
+    { line: '感受重力吧！\n同色的劍可以穿過，銀色的要跳！', attack: 'gravity' },
+    { line: '先把你推出去，\n再在中間爆炸！', attack: 'knockChariot' },
+    { line: '小貓兵會用線綁住你，\n看清楚是要靠近還是遠離！', attack: 'tether' },
+    { line: '肉球光輪，轉起來！\n跟著光束轉的方向跑！', attack: 'rotLaser' },
+    { line: '十字斬？斜十字斬？\n躲進沒有光的縫隙裡！', attack: 'cross' },
+    { line: '本大爺看見了……你的未來！\n記住紫色的你是怎麼走的！', attack: 'future' },
+    { line: '地火會一直留在地上，\n想清楚要放在哪裡！', attack: 'fireBait' },
+    { line: '紅色的地板會塌下去，\n快換到別塊地板上！', attack: 'tileFall' },
+    { line: '頭上的箭頭，\n倒數完就會把你推過去！', attack: 'march' },
+    { line: '看清楚水晶上的號碼，\n輪到你的圈才能站進去！', attack: 'limitCut' },
+    { line: '隕石要落下來了——\n離得越遠，傷害越小！', attack: 'proximity' },
+    { line: '連鎖爆炎會一格一格往前炸，\n等前一格炸完再躲進去！', attack: 'exaflare' },
+    { line: '小心別被推到牆上的刺！', attack: 'knockback' },
+    { line: '時間……停止吧。\n記住預兆，時間恢復時會一起炸開！', attack: 'timeStop' },
+    { line: '擊退回中心！\n然後——炸彈倒數完的時候不准動！', attack: ['knockDynamo', 'accelBomb'] }
+];
+
+// ⭐️ 正式版的回合表（第一階段 7 回合，介紹基本機制；第二階段 7 回合＋絕・萬貓天動）
+const TURNS_1S = [
+    { line: '看到地上的橘色預兆了嗎？\n站在上面可是會被炸飛的！', attack: 'aoe' },
+    { line: '鋼鐵要遠離中心，\n月環要靠近中心——記住了！', attack: 'chariot' },
+    { line: '光與暗——\n站到跟你水晶一樣顏色的地方！', attack: 'lightDark' },
+    { line: '小貓兵，衝鋒！\n別站在牠們衝過來的直線上！', attack: 'charges' },
+    { line: '看到塔就要踩進去！\n一座都不准漏！', attack: 'towers' },
+    { line: '來玩點不一樣的——\nINU 的猜謎秀，開始！', attack: 'quiz' },
+    { line: '看著本大爺的眼睛……\n不，千萬別看！要背對我！', attack: 'gaze' }
+];
+const TURNS_2S = [
+    { line: '預兆之後是塔！\n記得踩好踩滿！', attack: ['aoe', 'towers'] },
+    { line: '鋼鐵？月環？\n這次可沒那麼好看清楚了！', attack: 'chariot' },
+    { line: '來得正好！\n讓這傢伙見識一下\n我們的合體技！', attack: 'twinBoss', intro: 'knight' },
+    { line: '光暗之後是突進！\n跟得上嗎？', attack: ['lightDark', 'charges'] },
     { line: '本大爺看見了……\n你的未來！', attack: 'future' },
-    { line: '本大爺先教你——\n鋼鐵要遠離，月環要靠近！', attack: 'chariot' },
-    { line: '看著本大爺的眼睛……\n不，千萬別看！', attack: 'gaze' },
-    { line: '每一座塔都要踩！\n一座都不准漏！', attack: 'towers' },
-    { line: '本大爺的地火，\n你打算放在哪裡呢？', attack: 'fireBait' },
-    { line: '被推出去之後……\n中間可是會爆炸的喔！', attack: 'knockChariot' },
-    { line: '肉球光輪，\n轉起來吧！', attack: 'rotLaser' },
-    { line: '再來一題！\n這次你一定答不出來！', attack: 'quiz' },
-    { line: '你腳下的地板……\n還撐得住嗎？', attack: 'tileFall' },
-    { line: '頭上的箭頭，\n可不是裝飾喔！', attack: 'march' },
-    { line: '再看一次未來吧……\n這次你還記得住嗎？', attack: 'future' },
-    { line: '小貓兵們，\n用連線綁住他！', attack: 'tether' },
-    { line: '十字斬？斜十字斬？\n看清楚再跑！', attack: 'cross' },
-    { line: '看清楚你的號碼！\n只有輪到你的圈才能站！', attack: 'limitCut' },
-    { line: '隕石要落下來了——\n跑得越遠越好！', attack: 'proximity' },
-    { line: '小心別撞到牆上的刺！', attack: 'knockback' },
-    { line: '連續技！\n光暗接小貓兵突進！', attack: ['lightDark', 'charges'] }
+    { line: '……又來一個礙事的？\n兩個一起收拾掉！', attack: 'allyDuo', intro: 'ally' },
+    { line: '最後的猜謎！\n答錯的話就把你變成貓！', attack: 'quiz' },
+    { line: '絕・萬貓天動！！', attack: 'enrage' }
+];
+
+// ⭐️ 開場對話：第一次進入戰鬥時播放（按 X 可以跳過）
+//   who：narr＝旁白（下方對話框）／inu＝INU（對話泡泡）
+//   fx：這一句開始時的演出 → turn 轉過身／eyes 眼睛發紅光／calm 恢復平靜／lookAway 別過頭／front 轉回來／wag 偷偷開心／ready 準備開戰
+const OPENING = [
+    { who: 'narr', text: '* （……好安靜。）' },
+    { who: 'narr', text: '* （連守在城門口的倒頭，都已經被你甩在身後了。）' },
+    { who: 'inu', text: '今天的艾歐澤亞，\n天氣真好啊。' },
+    { who: 'inu', text: '陸行鳥在草原上奔跑，\n莫古力在雲端哼著歌……' },
+    { who: 'inu', text: '像這樣的日子裡，\n像你這樣的光之戰士……', fx: 'turn' },
+    { who: 'inu', text: '……就該被本大爺\n狠狠地教訓一頓。', fx: 'eyes' },
+    { who: 'inu', text: '你從城門一路走到這裡，\n本大爺全都看見了。', fx: 'calm' },
+    { who: 'inu', text: '你摸了多少隻貓的頭……\n又拔了幾次劍。' },
+    { who: 'inu', text: '聽好了，光之戰士。\n本大爺可不是\n只會一種玩法的魔王。' },
+    { who: 'inu', text: '要是你沒什麼\n挑戰魔王的經驗——\n本大爺勸你，好好說話。', fx: 'lookAway' },
+    { who: 'inu', text: '本大爺可是\n很好商量的……\n大概吧。' },
+    { who: 'inu', text: '不過，要是把本大爺\n惹毛了的話……\n後果你自己負責。', fx: 'eyes' },
+    { who: 'inu', text: '還有，先說好。\n本大爺最討厭\n被說「可愛」了。', fx: 'calm' },
+    { who: 'narr', text: '* （INU 的尾巴，悄悄地搖了一下。）', fx: 'wag' },
+    { who: 'inu', text: '好了，廢話到此為止。\n光之戰士——\n準備好了嗎？', fx: 'ready' }
 ];
 
 // rage：震怒路線改用的攻擊
@@ -366,13 +425,13 @@ const ACTS = [
     { name: '稱讚可愛', mercy: 10,
       text: '* 你稱讚 INU 很可愛。\n* INU 的尾巴不自覺地搖了起來。',
       text2: '* 你稱讚 INU 很可愛。\n* INU 咬緊牙關，假裝沒聽見。' },
-    { name: '摸頭', mercy: 8,
+    { name: '摸頭', mercy: 10,
       text: '* 你摸了摸 INU 的頭。\n* INU 嘴上說著「放肆！」，耳朵卻垂了下來。',
       text2: '* 你伸出手……\n* INU 一爪拍開了你的手。' },
-    { name: '陪他玩毛線', mercy: 9,
+    { name: '陪他玩毛線', mercy: 10,
       text: '* 你滾出一顆毛線球。\n* INU 忍不住撲了上去。',
       text2: '* 你滾出一顆毛線球。\n* INU 一爪把它打得粉碎。' },
-    { name: '喵喵叫', mercy: 5,
+    { name: '喵喵叫', mercy: 10,
       text: '* 你「喵～」了一聲。\n* INU 愣了一下，小聲地「喵」了回來。',
       text2: '* 你「喵～」了一聲。\n* INU 發出了低沉的吼聲。' },
     { name: '給罐罐', mercy: 15, once: true,
@@ -564,7 +623,8 @@ for (const [key, src] of Object.entries(CONFIG.BOSS_IMAGES)) {
 // 目前該用哪一張立繪
 function bossPic() {
     let key = 'phase1';
-    if (G.phase === 2) {
+    if (G.opening && G.opening.glowT > 0.3) key = 'rage';   // 開場：生氣、背後泛紅光時換成震怒的立繪
+    else if (G.phase === 2) {
         if (G.route === 'play') key = 'play';
         else key = (G.bossTired || G.mercyReady || G.bossHp <= G.bossMax * 0.15) ? 'tired' : 'rage';
     }
@@ -592,13 +652,13 @@ let G;
 let playerCode = '';
 let startTime = 0;
 
-function newBattle(ultimate = false) {
+function newBattle(ultimate = false, full = false) {
     SR = ultimate ? CONFIG.ULTIMATE.HITBOX : 4;
     G = {
         state: 'text', t: 0, stateT: 0,
         phase: 1, route: null, D: DIFFICULTY.phase1.D, DMG: DIFFICULTY.phase1.DMG, loops: 0,
         queue: [], lastAct: null, debuffs: [], delayed: [],
-        hp: CONFIG.PLAYER_HP, bossHp: CONFIG.BOSS_HP, bossMax: CONFIG.BOSS_HP,
+        hp: CONFIG.PLAYER_HP, bossHp: (full ? CONFIG : SHORT).BOSS_HP, bossMax: (full ? CONFIG : SHORT).BOSS_HP, full,
         mercy: 0, mercyBroken: false, mercyReady: false,
         turn: 0, flavor: 0,
         menuIdx: 0, listIdx: 0, list: null,
@@ -617,6 +677,7 @@ function newBattle(ultimate = false) {
             bossHp: CONFIG.PHASE2_HP, bossMax: CONFIG.PHASE2_HP, mercyBroken: true,
             ultTurns: genUltTurns(), ultGauntlet: genUltGauntlet()
         });
+        snapPhase2();
         playBGM('rage', 'phase2');
         say(['* 空氣突然變得沉重。', '* 紅貓魔王 INU 從一開始就是全力了。\n* ——絕境戰，開始。',
              '* 絕境戰中，只有水晶中心的一個點會被打中。\n* 按住 Shift 可以慢速移動，方便穿過狹窄的縫隙。'], () => {
@@ -625,6 +686,7 @@ function newBattle(ultimate = false) {
         });
         return;
     }
+    if (!openingSeen) { startOpening(); return; }   // 第一次進入戰鬥：先播開場對話
     playBGM('phase1');
     say(['* 紅貓魔王 INU 擋住了去路！'], toMenu);
 }
@@ -636,6 +698,43 @@ const wideBox = () => { const b = G.box; b.tx = 32; b.ty = 250; b.tw = 576; b.th
 function setState(s) { G.state = s; G.stateT = 0; }
 
 // ----- 文字 -----
+// ----- 開場對話 -----
+let openingSeen = false;      // 同一次開啟頁面只播一次（死掉重來、再挑戰一次都不會重播）
+function startOpening() {
+    G.opening = { i: -1, dark: 1, darkT: 1, glow: 0, glowT: 0, flip: 1, flipT: 1, bounce: 0 };
+    nextOpening();
+}
+function nextOpening() {
+    const O = G.opening;
+    if (!O) return;
+    O.i++;
+    if (O.i >= OPENING.length) { endOpening(); return; }
+    const st = OPENING[O.i];
+    if (st.fx === 'turn') { O.darkT = 0; O.flipT = 0; }
+    if (st.fx === 'eyes') { O.glowT = 1; G.shake = 0.35; SFX.crack(); }
+    if (st.fx === 'calm') { O.glowT = 0; O.flipT = 0; }
+    if (st.fx === 'lookAway') { O.flipT = 1; O.glowT = 0; }
+    if (st.fx === 'wag') { O.bounce = 0.8; }
+    if (st.fx === 'ready') { O.glowT = 0.6; }
+    if (st.who === 'narr') say([st.text], nextOpening);
+    else { wideBox(); bossSay([st.text], nextOpening); }
+}
+function endOpening() {
+    openingSeen = true;
+    G.opening = null; G.bubble = null;
+    G.flash = 0.6; G.screenShake = 0.3;
+    playBGM('phase1');
+    say(['* 紅貓魔王 INU 擋住了去路！'], toMenu);
+}
+function updateOpening(dt) {
+    const O = G.opening;
+    if (!O) return;
+    O.dark += (O.darkT - O.dark) * Math.min(1, dt * 2.5);
+    O.glow += (O.glowT - O.glow) * Math.min(1, dt * 3);
+    O.flip += (O.flipT - O.flip) * Math.min(1, dt * 8);
+    O.bounce = Math.max(0, O.bounce - dt);
+    if (hit('back')) endOpening();      // X：跳過開場
+}
 function say(lines, done) {
     wideBox();
     setState('text');
@@ -672,7 +771,7 @@ function toMenu() {
     const fl = G.phase === 1 ? FLAVOR_1 : (G.route === 'rage' ? FLAVOR_RAGE : FLAVOR_PLAY);
     let line = fl[G.flavor % fl.length];
     if (G.mercyReady) line = '* INU 看起來已經不想戰鬥了。';
-    else if (G.phase === 1 && G.mercy >= CONFIG.MERCY_BREAK_AT) line = '* INU 的眼神……似乎在動搖。';
+    else if (G.phase === 1 && G.mercy >= CFG().MERCY_BREAK_AT) line = '* INU 的眼神……似乎在動搖。';
     G.text = { lines: [line], i: 0, shown: 999, done: null };
     G.menuIdx = Math.min(G.menuIdx, menuItems().length - 1);
 }
@@ -698,10 +797,15 @@ function chooseOption(opt) {
         if (a.once && G.actsUsed[a.name]) { say([a.usedText], bossTurn); return; }
         G.actsUsed[a.name] = true;
         if (G.phase === 1) {
-            const gain = G.lastAct === a.name ? Math.ceil(a.mercy / 2) : a.mercy;
+            const repeat = G.lastAct === a.name && a.mercy > 0;
+            const gain = repeat ? Math.ceil(a.mercy / 2) : a.mercy;
+            const wasReady = G.mercy >= CFG().MERCY_BREAK_AT;
             G.lastAct = a.name;
             G.mercy = Math.min(99, G.mercy + gain);
-            say([a.text], bossTurn);
+            if (gain > 0) G.mercyPop = { text: `+${gain} 感化` + (repeat ? '（同樣的動作，效果減半）' : ''), t: 0 };
+            const lines = [a.text];
+            if (!wasReady && G.mercy >= CFG().MERCY_BREAK_AT) { lines.push('* INU 動搖了！\n* 現在可以使用「感化」了。'); setTimeout(SFX.correct, 200); }
+            say(lines, bossTurn);
         } else {
             say([a.text2 || a.text], bossTurn);
         }
@@ -720,7 +824,7 @@ function chooseOption(opt) {
         say([it.text + `\n* 回復了 ${G.hp - before} HP！`], bossTurn);
     } else if (opt.spare) {
         if (G.mercyReady) ending('spare');
-        else if (G.phase === 1 && G.mercy >= CONFIG.MERCY_BREAK_AT) breakMercy('play');
+        else if (G.phase === 1 && G.mercy >= CFG().MERCY_BREAK_AT) breakMercy('play');
         else say(['* 你試著感化 INU……\n* 但 INU 還沒有被打動。'], bossTurn);
     } else if (opt.flee) {
         say(['* 你想要逃跑……\n* 但魔王城的大門已經被鎖上了。'], bossTurn);
@@ -860,7 +964,7 @@ function gainLB() {
 const seenAll = () => !CONFIG.SEE_ALL_MECHANICS || G.turn >= (G.phase === 1 ? turnList().length : turnList().length - 1);
 // INU 目前最低只能被打到多少血
 function bossFloor() {
-    if (G.phase === 1) return seenAll() ? 0 : CONFIG.PHASE2_AT + 1;
+    if (G.phase === 1) return seenAll() ? 0 : CFG().PHASE2_AT + 1;
     if (G.bossTired) return 0;
     return 1;   // 絕・萬貓天動之前不會倒下
 }
@@ -884,7 +988,7 @@ function resolveFight(acc) {
 }
 function afterFight() {
     G.dmgText = null;
-    if (G.phase === 1 && G.bossHp <= CONFIG.PHASE2_AT) breakMercy('rage');
+    if (G.phase === 1 && G.bossHp <= CFG().PHASE2_AT) breakMercy('rage');
     else if (G.phase === 2 && G.bossHp <= 0) ending('fight');
     else {
         // 血量剩 20% 以下：下一回合直接放絕・萬貓天動
@@ -897,8 +1001,8 @@ function afterFight() {
 }
 
 // ----- 回合 -----
-const turnList = () => G.ultimate ? G.ultTurns : G.phase === 1 ? TURNS_1 : TURNS_2;
-const gSteps = () => G.ultimate ? G.ultGauntlet : GAUNTLET;
+const turnList = () => G.ultimate ? G.ultTurns : G.phase === 1 ? (G.full ? TURNS_1 : TURNS_1S) : (G.full ? TURNS_2 : TURNS_2S);
+const gSteps = () => G.ultimate ? G.ultGauntlet : G.full ? GAUNTLET : GAUNTLET_S;
 function currentTurn() {
     const list = turnList();
     const t0 = list[G.turn % list.length];
@@ -945,6 +1049,11 @@ function startAttack(kind, durOverride) {
     setState('attack');
     G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
     const parts = kind.split('+'), A = ATTACKS[parts[0]];
+    // 第一次遇到的機制：預兆拉長 25%（只在第一階段和感化路線）
+    G.seenKinds = G.seenKinds || new Set();
+    G.warnBoost = hintsOn() && parts.some(p => !G.seenKinds.has(p)) ? 1.25 : 1;
+    G.firstTime = G.warnBoost > 1;
+    parts.forEach(p => G.seenKinds.add(p));
     const a = { kind, t: 0, events: [], dur: durOverride || A.dur(), facing: parts.some(p => ATTACKS[p].facing) };
     a.at = (t, fn) => a.events.push({ t, fn });
     G.attack = a; G.knight = null; G.ally = null;
@@ -997,6 +1106,26 @@ function breakMercy(route) {
         setState('breaking');
     });
 }
+// 第二階段開頭的狀態：光之加護次數、道具、極限技量表（光之加護用完、從頭重來時恢復成這樣）
+const maxRevives = () => G.ultimate ? CONFIG.ULTIMATE.REVIVES : CONFIG.REVIVES;
+function snapPhase2() {
+    G.revives = maxRevives();
+    G.p2Snap = { items: G.items.map(i => i.count), lb: G.lb || 0, lb3Used: !!G.lb3Used };
+}
+function restartPhase2() {
+    const P = G.p2Snap || {};
+    G.turn = 0; G.flavor = 0; G.loops = 0; G.gauntlet = null; G.curTurn = null;
+    G.D = G.ultimate ? CONFIG.ULTIMATE.D : diffOf(G.route).D;
+    G.bossHp = G.bossMax; G.bossTired = false; G.mercyReady = false; G.mercyBroken = true; G.blocks = 0;
+    G.hp = CONFIG.PLAYER_HP; G.hot = null; G.soul.inv = 1.5;
+    if (P.items) G.items.forEach((it, i) => { it.count = P.items[i]; });
+    if (P.lb !== undefined) { G.lb = P.lb; G.lb3Used = P.lb3Used; }
+    G.revives = CONFIG.REVIVE_REFRESH ? maxRevives() : 0;
+    if (bgm) bgm.play().catch(() => {});
+    setBox(160, 120);
+    G.soul.mode = 'red'; G.soul.x = 320; G.soul.y = G.box.ty + 60;
+    say(['* 你被拉回了戰鬥的開頭……', CONFIG.REVIVE_REFRESH ? '* 光之加護重新亮了起來。' : '* 光之加護……沒有再亮起來。'], () => bossSay(['又回來了？\n不管幾次，\n本大爺都奉陪！'], bossTurn));
+}
 function finishBreak() {
     G.mercyBroken = true;
     // 碎片飛散
@@ -1006,8 +1135,9 @@ function finishBreak() {
     SFX.crack();
     setTimeout(() => {
         G.phase = 2; G.turn = 0; G.flavor = 0; G.loops = 0;
-        G.D = DIFFICULTY[G.route].D; G.DMG = DIFFICULTY[G.route].DMG;
-        G.bossHp = CONFIG.PHASE2_HP; G.bossMax = CONFIG.PHASE2_HP;
+        G.D = diffOf(G.route).D; G.DMG = diffOf(G.route).DMG;
+        G.bossHp = CFG().PHASE2_HP; G.bossMax = CFG().PHASE2_HP;
+        snapPhase2();
         playBGM(G.route === 'rage' ? 'rage' : 'play', 'phase2');
         say(['* INU 打碎了感化按鈕。'], () => {
             setBox(160, 120);
@@ -1030,8 +1160,8 @@ function ending(kind) {
 function showVictory(kind) {
     const E = ENDINGS[kind];
     const secs = Math.round((Date.now() - startTime) / 1000);
-    document.getElementById('winTitle').textContent = (G.ultimate ? '絕・' : '') + E.title;
-    document.getElementById('winRoute').textContent = E.route + (G.ultimate ? '（絕境戰）' : '');
+    document.getElementById('winTitle').textContent = (G.ultimate ? '絕・' : G.full ? '完整版・' : '') + E.title;
+    document.getElementById('winRoute').textContent = E.route + (G.ultimate ? '（絕境戰）' : G.full ? '（完整版）' : '');
     document.getElementById('ultBtn').textContent = G.ultimate ? '再挑戰一次絕難度' : '太簡單？來試試絕難度吧';
     document.getElementById('winCode').textContent = playerCode;
     const now = new Date();
@@ -1058,18 +1188,23 @@ function die() {
     G.deadT = 0;
     G.ents = []; G.cast = null; G.debuffs = []; G.delayed = []; G.timeStop = null; G.vision = null;
     G.soul.march = null; G.soul.stun = 0;
-    G.deathLines = G.phase === 1 ? DEATH_1 : DEATH_2;
+    G.deathLines = G.phase === 1 ? DEATH_1
+        : G.revives > 0 ? [DEATH_2[0], DEATH_2[1], `* （光之加護：剩下 ${G.revives - 1} 次）`]
+        : [DEATH_2[0], '* 但是……光之加護已經耗盡了。'];
     G.deathShown = 0;
     SFX.shatter();
     if (bgm) bgm.pause();
 }
 function revive() {
     if (G.phase === 1) { newBattle(); return; }
-    // 第二階段：拒絕死亡，從同一回合繼續
+    // 第二階段：光之加護用完 → 回到第二階段開頭
+    if (!(G.revives > 0)) { restartPhase2(); return; }
+    // 還有光之加護：滿血從同一回合繼續
+    G.revives--;
     G.hp = CONFIG.PLAYER_HP;
     G.soul.inv = 1.5;
     if (bgm) bgm.play().catch(() => {});
-    if (G.gauntlet) { runGauntletStep(); return; }   // 絕・萬貓天動：從死掉的那一段繼續
+    if (G.gauntlet) { startGauntlet(); return; }     // 絕・萬貓天動：從第一段重來
     const turn = G.curTurn || currentTurn();
     setBox(...AT(turn.kinds[0]).box());
     G.soul.mode = 'red';
@@ -1143,9 +1278,10 @@ const spawn = e => { G.ents.push(e); return e; };
 // =====================================================================
 // 劍（藍色水晶的重力關卡）
 //   銀劍：一定要閃（跳過）／光、暗的劍：屬性跟水晶一樣就能直接穿過，不一樣就會受傷
-const SWORD_COL = { none: '#e5e7eb', light: '#fde68a', dark: '#c084fc' };
-const SWORD_GLOW = { none: null, light: 'rgba(253, 230, 138, 0.9)', dark: 'rgba(168, 85, 247, 0.9)' };
-function drawSword(x, y, w, h, tipUp, col, glow) {
+const SWORD_COL = { none: '#9ca3af', light: '#facc15', dark: '#7e22ce' };   // 銀劍＝深鐵灰、光＝亮金、暗＝深紫
+const SWORD_GLOW = { none: null, light: 'rgba(253, 224, 71, 1)', dark: 'rgba(192, 132, 252, 1)' };
+const SWORD_EDGE = { none: '#111827', light: '#fff7cc', dark: '#e9d5ff' };
+function drawSword(x, y, w, h, tipUp, col, glow, edge = null) {
     const cx = x + w / 2, bw = Math.max(4, w * 0.45), guardY = tipUp ? y + h - 9 : y + 9;
     ctx.save();
     if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 10; }
@@ -1158,6 +1294,7 @@ function drawSword(x, y, w, h, tipUp, col, glow) {
     }
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
+    if (edge) { ctx.strokeStyle = edge; ctx.lineWidth = 1.5; ctx.stroke(); }
     // 劍身中線
     ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
     if (tipUp) ctx.fillRect(cx - 0.6, y + 8, 1.2, guardY - y - 8); else ctx.fillRect(cx - 0.6, guardY, 1.2, y + h - 8 - guardY);
@@ -1174,13 +1311,24 @@ function Sword(x, y, w, h, vx, vy, elem = 'none', tipUp = true) {
         update(dt) {
             x += vx * dt; y += vy * dt;
             const b = G.box;
-            if (hitRect(x + w * 0.25, y, w * 0.5, h) && (elem === 'none' || elem !== G.ld)) damage(6);
+            if (hitRect(x + w * 0.25, y, w * 0.5, h) && (elem === 'none' || elem !== G.ld)) {
+                const inv0 = G.soul.inv;
+                damage(6);
+                if (G.soul.inv > inv0) spawn(FloatText(G.soul.x, G.soul.y - 22, elem === 'none' ? '銀劍要跳過！' : '屬性不同！', RED));   // 告訴玩家為什麼被打
+            }
             return !(x > b.x + b.w + 80 || x + w < b.x - 80 || y > b.y + b.h + 80 || y + h < b.y - 80);
         },
         draw() {
             const pass = elem !== 'none' && elem === G.ld;
-            ctx.globalAlpha = pass && !HARD() ? 0.45 : 1;   // 第一階段：可以穿過的劍會變淡
-            drawSword(x, y, w, h, tipUp, SWORD_COL[elem], SWORD_GLOW[elem]);
+            ctx.globalAlpha = pass ? 0.4 : 1;   // 和水晶同屬性、可以穿過的劍會變淡
+            drawSword(x, y, w, h, tipUp, SWORD_COL[elem], SWORD_GLOW[elem], SWORD_EDGE[elem]);
+            // 護手上的屬性標記
+            if (elem !== 'none') {
+                const gx = x + w / 2, gy = tipUp ? y + h - 9 : y + 9;
+                ctx.fillStyle = elem === 'light' ? '#a16207' : '#3b0764'; ctx.beginPath(); ctx.arc(gx, gy, 7, 0, 7); ctx.fill();
+                ctx.strokeStyle = SWORD_EDGE[elem]; ctx.lineWidth = 1; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = `bold 9px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(elem === 'light' ? '光' : '暗', gx, gy + 3); ctx.textAlign = 'left';
+            }
             ctx.globalAlpha = 1;
         }
     };
@@ -1321,8 +1469,8 @@ function AoE(o) {
                 if (o.show === 'late' && t < o.warn - 0.45) return;   // 只在最後一刻閃現
                 if (o.hideAfter !== undefined && t > o.hideAfter) return;
                 const p = t / o.warn;
-                path(); ctx.fillStyle = col + (0.12 + 0.25 * p) + ')'; ctx.fill('evenodd');
-                ctx.strokeStyle = col + '0.9)'; ctx.lineWidth = 2; ctx.stroke();
+                path(); ctx.fillStyle = col + teleAlpha(p, o.warn - t) + ')'; ctx.fill('evenodd');
+                ctx.strokeStyle = col + '1)'; ctx.lineWidth = 3; ctx.stroke();
             } else {
                 if (o.fake && o.show === false) return;
                 path(); ctx.fillStyle = (o.fake ? 'rgba(221, 214, 254, ' : 'rgba(255, 220, 160, ') + 0.7 * (1 - (t - o.warn) / 0.35) + ')'; ctx.fill('evenodd');
@@ -1361,6 +1509,9 @@ function Tower(x, y, r, warn) {
     };
 }
 
+// 預兆的填色：越接近發動越深，最後 0.5 秒閃爍提醒
+const teleAlpha = (p, left) => (0.18 + 0.3 * p + (left < 0.5 ? 0.18 * (0.5 + 0.5 * Math.sin(G.t * 40)) : 0)).toFixed(3);
+
 // 直線 AoE：穿過某一點、任意角度（ray = 只往單一方向延伸）
 const VIS = 'rgba(196, 181, 253, ', FRZ = 'rgba(103, 232, 249, ';   // 未來觀測／時間停止中的預兆顏色
 function LineAoE(x, y, ang, width, warn, o = {}) {
@@ -1394,8 +1545,8 @@ function LineAoE(x, y, ang, width, warn, o = {}) {
                 if (o.show === 'late' && t < warn - 0.45) return;
                 if (o.hideAfter !== undefined && t > o.hideAfter) return;
                 const p = t / warn;
-                path(); ctx.fillStyle = col + (0.12 + 0.25 * p) + ')'; ctx.fill();
-                ctx.strokeStyle = col + '0.9)'; ctx.lineWidth = 2; ctx.stroke();
+                path(); ctx.fillStyle = col + teleAlpha(p, warn - t) + ')'; ctx.fill();
+                ctx.strokeStyle = col + '1)'; ctx.lineWidth = 3; ctx.stroke();
             } else {
                 if (o.fake && o.show === false) return;
                 path();
@@ -1985,6 +2136,8 @@ function EnemyKnight() {
             const ty = k.y < G.box.y + 60 ? k.y + 36 : k.y - 30;
             ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#fca5a5';
             ctx.fillText(k.cast ? `${CONFIG.KNIGHT.NAME}・${k.cast.name}` : CONFIG.KNIGHT.NAME, k.x, ty);
+            const KH = { '橫掃': '劍指的那一側會被斬', '突進': '踩完塔立刻橫向閃開', '盾擊': '被推開後要落在同色區', '威壓凝視': '背對倒頭' };
+            if (k.cast && hintsOn() && KH[k.cast.name]) { ctx.fillStyle = YELLOW; ctx.font = `bold 10px ${FONT}`; ctx.fillText('▶ ' + KH[k.cast.name], k.x, ty + (ty > k.y ? 20 : -14)); }
             if (k.cast) {
                 ctx.fillStyle = '#333'; ctx.fillRect(k.x - 32, ty + 3, 64, 4);
                 ctx.fillStyle = RED; ctx.fillRect(k.x - 32, ty + 3, 64 * Math.min(1, k.cast.t / k.cast.dur), 4);
@@ -2480,8 +2633,9 @@ function cast(name, dur) { G.cast = { name, t: 0, dur }; SFX.cast(); }
 // =====================================================================
 const SPD = () => 0.75 + 0.25 * G.D;          // 移動速度倍率（1.0 / 1.2 / 1.4）
 const RATE = () => 0.6 + 0.4 * G.D;           // 出現頻率倍率（1.0 / 1.4 / 1.6）
-const WARN = t => t / (0.6 + 0.4 * G.D);      // 預兆時間（難度越高越短）
+const WARN = t => t / (0.6 + 0.4 * G.D) * (G.warnBoost || 1);   // 預兆時間（難度越高越短；第一次遇到的機制會再拉長）
 const HARD = () => G.D >= 1.5;                // 第二階段
+const hintsOn = () => G && !G.ultimate && G.D < 2.3;   // 第一階段和感化路線：顯示白話提示（震怒、絕難度不顯示）
 const RAGE = () => G.D >= 2.3;                // 震怒
 
 const boxC = () => ({ x: G.box.tx + G.box.tw / 2, y: G.box.ty + G.box.th / 2 });
@@ -2581,8 +2735,8 @@ const TIME_STOP_SETS = [
 ];
 
 // 未來觀測：n = 段數（α：看得到預兆和殘影／β：只看得到殘影）
-function runFuture(a, n) {
-    const beta = HARD(), gap = beta ? 1.5 : 1.8, first = beta ? 1.4 : 1.6;
+function runFuture(a, n, beta = HARD()) {
+    const gap = beta ? 1.5 : 1.8, first = beta ? 1.4 : 1.6;
     // 產生機制順序，並確保每一段都走得到
     const keys = Object.keys(MECH), seq = [];
     let pos = boxC(), guard = 0;
@@ -2616,7 +2770,7 @@ function runFuture(a, n) {
         const res = R0 + first + i * gap, tele = res - 1.2;
         a.at(tele, () => {
             cast(`未來重現 ${i + 1} / ${n}`, 1.2);
-            MECH[m.k].fire(res - tele, { show: HARD() ? false : 'late' });
+            MECH[m.k].fire(res - tele, { show: beta ? false : 'late' });
         });
     });
 }
@@ -2755,7 +2909,12 @@ const ATTACKS = {
                 a.at(t, () => {
                     const name = { c: '肉球鋼鐵', d: '肉球月環', cd: '鋼鐵月環', dc: '月環鋼鐵' }[s];
                     cast(name, c);
-                    [...s].forEach((m, j) => (m === 'c' ? chariotAoE : dynamoAoE)(c + j * 1.3, ffShow()));
+                    (s[0] === 'c' ? chariotAoE : dynamoAoE)(c, ffShow());          // 先只出第一個預兆
+                });
+                // 連續技：第一個炸完的瞬間，才出現第二個的預兆
+                if (s.length === 2) a.at(t + c, () => {
+                    if (hintsOn()) cast(s[1] === 'c' ? '肉球鋼鐵' : '肉球月環', 1.3);   // 白話提示跟著換
+                    (s[1] === 'c' ? chariotAoE : dynamoAoE)(1.3, ffShow());
                 });
                 t += len;
             }
@@ -2927,8 +3086,8 @@ const ATTACKS = {
         }
     },
     future: {   // 未來觀測（絕亞歷山大）：先看未來，再憑記憶重現
-        box: () => [260, 170], dur: () => HARD() ? 14.8 : 13.4, marker: true, calm: true,
-        start(a) { runFuture(a, HARD() ? 4 : 3); }
+        box: () => [260, 170], dur: () => isFull() && HARD() ? 14.8 : 13.4, marker: true, calm: true,
+        start(a) { runFuture(a, isFull() && HARD() ? 4 : 3, isFull() && HARD()); }   // 正式版一律是 α（三段、看得到預兆）
     },
     fireBait: {   // 烈焰足跡：引導的地火會長時間留在地上
         box: () => [260, 170], dur: () => HARD() ? 13 : 14,
@@ -2950,7 +3109,7 @@ const ATTACKS = {
         }
     },
     twinBoss: {   // 雙 BOSS 合體技：INU 和守門騎士同時詠唱，兩邊的機制都要解
-        box: () => [270, 170], dur: () => 19.5, minDur: 19.5, facing: true, calm: true,
+        box: () => [270, 170], dur: () => isFull() ? 19.5 : 15, minDur: 15, facing: true, calm: true,   // 正式版：四種合體技抽三種
         hint: `雙 BOSS：INU 和${CONFIG.KNIGHT.NAME}會同時詠唱！看清楚兩條詠唱條，還有框裡${CONFIG.KNIGHT.NAME}的劍指向哪裡。`,
         start(a) {
             const w = Math.max(2.6, WARN(3.8)), b = tbox(), c = boxC();     // 詠唱比較長，給玩家時間同時看兩邊
@@ -3244,7 +3403,7 @@ const ATTACKS = {
         }
     },
     finale: {   // 絕・萬貓天動的最後一招（約 20 秒）：斜向肉球砲 → 最終肉球光輪（＋小貓兵突進、地火）
-        box: () => [270, 170], dur: () => 20, marker: true,
+        box: () => [270, 170], dur: () => isFull() ? 20 : 12, marker: true,
         start(a) {
             // 1. 斜向肉球砲
             a.at(0.1, () => {
@@ -3254,7 +3413,7 @@ const ATTACKS = {
                 G.screenShake = 0.3;
             });
             // 2. 最終肉球光輪：長詠唱，越轉越快、中途逆轉
-            const warn = 1.0, life = 15.5, flipAt = 8.0, t0 = 2.0;
+            const warn = 1.0, life = isFull() ? 15.5 : 8.0, flipAt = isFull() ? 8.0 : 4.5, t0 = 2.0;   // 正式版：光輪轉 8 秒
             a.at(t0, () => {
                 const c = boxC();
                 cast('最終肉球光輪', warn + life);
@@ -3329,6 +3488,18 @@ const GAUNTLET = [
     { k: 'knockDynamo', d: 3.4 }, { cut: 'black' },
     { k: 'arenaShift', d: 3.0 },  { cut: 'black' },
     { k: 'finale', d: 20.0 }
+];
+// 正式版的絕・萬貓天動（約 50 秒）
+const GAUNTLET_S = [
+    { k: 'lightDark', d: 3.0 },   { cut: 'black' },
+    { k: 'charges', d: 3.0 },     { cut: 'white' },
+    { k: 'chariot', d: 3.4 },     { cut: 'flash' },
+    { k: 'towers', d: 3.4 },
+    { talk: ['……呼。', '你……還站著啊。'] },
+    { cut: 'black' },
+    { k: 'gaze', d: 3.0 },        { cut: 'flash' },
+    { k: 'aoe', d: 2.8 },         { cut: 'black' },
+    { k: 'finale', d: 12.0 }
 ];
 const CUT_TIME = { black: 0.35, white: 0.25, flash: 0.7 };
 
@@ -3478,8 +3649,8 @@ function update(dt) {
     G.shards = G.shards.filter(s => s.y < H + 40);
 
     switch (G.state) {
-        case 'text': updateTyping(G.text, false, dt); break;
-        case 'bossText': updateTyping(G.bubble, true, dt); updateSoul(dt); break;
+        case 'text': updateTyping(G.text, false, dt); updateOpening(dt); break;
+        case 'bossText': updateTyping(G.bubble, true, dt); updateSoul(dt); updateOpening(dt); break;
         case 'menu': {
             const n = menuItems().length;
             if (hit('left')) { G.menuIdx = (G.menuIdx + n - 1) % n; SFX.move(); }
@@ -3615,6 +3786,14 @@ function drawSoul() {
         ctx.fillStyle = '#fff'; ctx.strokeStyle = RED; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(s.x, s.y, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
+    // 屬性快要反轉：水晶外圍出現倒數圈
+    const ldd = G.state === 'attack' && G.debuffs.find(d => d.kind === 'ld' && d.timer !== undefined && d.timer < 2);
+    if (ldd) {
+        ctx.strokeStyle = YELLOW; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (ldd.timer / 2)); ctx.stroke();
+        ctx.font = `bold 11px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+        ctx.strokeText('反轉 ' + ldd.timer.toFixed(1), s.x, s.y - 24); ctx.fillStyle = YELLOW; ctx.fillText('反轉 ' + ldd.timer.toFixed(1), s.x, s.y - 24); ctx.textAlign = 'left';
+    }
     // 數字 debuff（肉球序列）：水晶右上角直接顯示阿拉伯數字
     const lim = G.state === 'attack' && G.debuffs.find(d => d.kind === 'limit');
     if (lim) {
@@ -3658,7 +3837,7 @@ function drawHint() {
         else if (G.soul.mode === 'blue') { text = '藍色的水晶：受到重力影響，按 ↑ 跳躍！'; color = BLUE; }
         // 顯示時間依字數決定（至少 3 秒），最後 0.5 秒淡出
         if (text) {
-            const dur = Math.max(3, 1 + text.length * 0.1);
+            const dur = Math.max(3, 1 + text.length * 0.1) * (G.firstTime ? 1.4 : 1);
             if (G.attack.t > dur) text = null; else alpha = Math.min(1, (dur - G.attack.t) / 0.5);
         }
     }
@@ -3686,7 +3865,18 @@ function drawBossInner() {
     if (rage) ox += (Math.random() - 0.5) * 1.5;
     ctx.save();
     if (G.shake > 0 && Math.floor(G.t * 20) % 2) ctx.globalAlpha = 0.4;
-    const top = 22, maxH = 195;
+    const top = 22, maxH = 195, O = G.opening;
+    if (O) {   // 開場：從暗處慢慢亮起，背對（左右翻轉）→ 轉身；生氣時背後泛紅光
+        ctx.globalAlpha = 1 - 0.78 * O.dark;
+        oy -= Math.abs(Math.sin(G.t * 18)) * 5 * O.bounce;
+        if (O.glow > 0.01) {
+            const gl = ctx.createRadialGradient(320, 120, 10, 320, 120, 150);
+            gl.addColorStop(0, `rgba(255, 40, 60, ${0.45 * O.glow})`); gl.addColorStop(1, 'rgba(255, 40, 60, 0)');
+            ctx.fillStyle = gl; ctx.fillRect(160, 0, 320, 250);
+        }
+        const sx = 1 - 2 * O.flip;   // 1＝正面，-1＝背對／別過頭（中間會有翻轉的過場）
+        ctx.translate(320, 0); ctx.scale(Math.abs(sx) < 0.08 ? 0.08 * Math.sign(sx || 1) : sx, 1); ctx.translate(-320, 0);
+    }
     if (rage) {
         const gl = ctx.createRadialGradient(320, 120, 10, 320, 120, 140);
         gl.addColorStop(0, 'rgba(255, 40, 60, 0.35)'); gl.addColorStop(1, 'rgba(255, 40, 60, 0)');
@@ -3704,7 +3894,7 @@ function drawBossInner() {
         PLACEHOLDER.forEach((row, r) => [...row].forEach((c, i) => {
             if (c === '#') ctx.fillRect(320 - w / 2 + i * px + ox, top + 10 + r * px + oy, px, px);
         }));
-        if (G.phase === 2) {   // 第二階段：眼睛發紅光
+        if (G.phase === 2 || (O && O.glow > 0.5)) {   // 第二階段（或開場生氣時）：眼睛發紅光
             ctx.fillStyle = RED;
             ctx.fillRect(320 - w / 2 + 3 * px + ox, top + 10 + 5 * px + oy, px * 2, px * 2);
             ctx.fillRect(320 - w / 2 + 11 * px + ox, top + 10 + 5 * px + oy, px * 2, px * 2);
@@ -3732,7 +3922,7 @@ function drawBossInner() {
         const w = 200;
         ctx.fillStyle = '#404040'; ctx.fillRect(320 - w / 2, 214, w, 12);
         ctx.fillStyle = G.phase === 2 ? RED : GREEN; ctx.fillRect(320 - w / 2, 214, w * G.bossHp / G.bossMax, 12);
-        const mark = G.phase === 1 ? CONFIG.PHASE2_AT / G.bossMax : G.bossTired ? 0 : CONFIG.ENRAGE_AT;   // 黃線：進入下一階段／絕・萬貓天動的門檻
+        const mark = G.phase === 1 ? CFG().PHASE2_AT / G.bossMax : G.bossTired ? 0 : CONFIG.ENRAGE_AT;   // 黃線：進入下一階段／絕・萬貓天動的門檻
         if (mark) { ctx.fillStyle = YELLOW; ctx.fillRect(320 - w / 2 + w * mark - 1, 211, 2, 18); }
     }
     if (G.dmgText) {
@@ -3776,10 +3966,39 @@ function drawBubble() {
     }
 }
 
+// 詠唱名稱的白話說明（第一階段和感化路線才顯示）
+const CAST_HINT = {
+    '肉球鋼鐵': '遠離中心！', '肉球月環': '站進中間的空洞！', '鋼鐵月環': '先遠離中心，再回到中間！', '月環鋼鐵': '先站到中間，再遠離中心！',
+    '肉球直線': '站到沒有預兆的那一條！', '橫掃肉球': '站到沒有預兆的那一條！', '貓爪噴發': '腳下會爆炸，快移開！', '追蹤預兆': '一直移動，別停下來！',
+    '光暗之陣': '站到和水晶同顏色的區域！', '光暗交錯': '站到和水晶同顏色的區域！',
+    '肉球光輪・順': '跟著光束轉的方向繞圈！', '肉球光輪・逆': '跟著光束轉的方向繞圈！',
+    '強制移動': '先站好，倒數完會被往箭頭方向推！',
+    '左側斬擊': '左半邊會被打，躲到右邊！', '右側斬擊': '右半邊會被打，躲到左邊！', '上方斬擊': '上半邊會被打，躲到下面！', '下方斬擊': '下半邊會被打，躲到上面！',
+    '肉球扇擊（引導）': '扇形會朝你打過來，打完立刻離開！',
+    '連鎖爆炎': '等前一格炸完，再躲進去！', '連鎖爆炎・縱': '等前一格炸完，再躲進去！',
+    '石化凝視': '背對眼睛！（最後移動的方向別朝它）', '逆・石化凝視': '面向眼睛！',
+    '肉球隕石': '離落點越遠，傷害越小！', '十字斬': '躲到斜角的空隙！', '斜十字斬': '躲到上下左右的空隙！',
+    '大地崩落': '離開發紅的地板！', '時間停止': '記住預兆，時間恢復時會一起炸開！',
+    '未來觀測α': '記住紫色殘影的走位！', '未來觀測β': '記住紫色殘影的走位！',
+    '烈焰足跡・月環': '地火放在外圍，最後回到中間！', '烈焰足跡・鋼鐵': '地火放在中間，最後跑到外圍！',
+    '肉球之塔': '站進塔裡！', '肉球序列': '照水晶上的號碼，輪到你才站進圈裡！',
+    '肉球擊退': '會被推開，別被推到牆上的刺！', '擊退鋼鐵': '被推到外圍後，中間會爆炸！', '擊退月環': '被推開後要回到中間！',
+    '擊退踩塔': '利用擊退把自己推進塔裡！', '小貓兵突進': '別站在小貓兵的直線上！',
+    '肉球重擊（分攤）': '和援軍站在一起！', '肉球滅世砲（武裝戍衛）': '躲到援軍的盾牌後面！',
+    '雙人連線・拉開': '和援軍拉開距離！', '雙人連線・靠近': '靠近援軍！',
+    '最終肉球砲': '躲開兩條斜線！', '最終肉球光輪': '跟著光束繞圈，地火別放在路上！'
+};
+const castHint = name => !hintsOn() ? null : name.startsWith('未來重現') ? '照剛才殘影的位置站！' : CAST_HINT[name] || null;
 function drawCast() {
     const c = G.cast;
     if (!c) return;
-    const w = 240, x = 320 - w / 2, y = G.box.y - 26;
+    const w = 240, x = 320 - w / 2, y = G.box.y - 26, hint = castHint(c.name);
+    if (hint) {   // 白話提示：詠唱條上面多一行
+        ctx.font = `bold 12px ${FONT}`;
+        const hw = Math.max(w, ctx.measureText('▶ ' + hint).width + 16);
+        ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(320 - hw / 2 - 4, y - 34, hw + 8, 19);
+        ctx.fillStyle = YELLOW; ctx.textAlign = 'center'; ctx.fillText('▶ ' + hint, 320, y - 20); ctx.textAlign = 'left';
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(x - 4, y - 16, w + 8, 26);
     ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
     ctx.fillText(`${CONFIG.BOSS_NAME} 詠唱中：${c.name}`, 320, y - 2); ctx.textAlign = 'left';
@@ -3847,6 +4066,10 @@ function drawEnts(under) {
 
 function drawBoxText() {
     const b = G.box;
+    if (G.opening) {   // 開場：右下角提示可以跳過
+        ctx.font = `12px ${FONT}`; ctx.fillStyle = '#8a7d63';
+        ctx.fillText('X 跳過開場', b.x + 14, b.y + b.h - 10);   // 左下角（右下角是「按 Z 繼續」）
+    }
     ctx.font = `17px ${FONT}`; ctx.fillStyle = '#fff';
     if ((G.state === 'text' || G.state === 'menu') && G.text) {
         const tx = G.text, full = tx.lines[Math.min(tx.i, tx.lines.length - 1)];
@@ -3935,6 +4158,43 @@ function drawCombo() {
     }
 }
 
+// 感化量表：第一階段在 INU 下方顯示（第二階段不能感化，不顯示）
+function drawMercyGauge() {
+    if (!G || G.opening || G.phase !== 1 || G.mercyBroken || !['menu', 'list', 'text'].includes(G.state)) return;
+    const max = CFG().MERCY_BREAK_AT, v = Math.min(max, G.mercy), w = 180, x = 320 - w / 2, y = 228, ready = G.mercy >= max;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(x - 54, y - 4, w + 108, 18);
+    ctx.font = `bold 11px ${FONT}`; ctx.fillStyle = '#f9a8d4'; ctx.textAlign = 'right'; ctx.fillText('感化', x - 6, y + 9);
+    ctx.fillStyle = '#3a2430'; ctx.fillRect(x, y, w, 10);
+    const g = ctx.createLinearGradient(x, y, x + w, y); g.addColorStop(0, '#f472b6'); g.addColorStop(1, '#fbcfe8');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w * v / max, 10);
+    ctx.strokeStyle = ready ? `rgba(253, 224, 71, ${0.6 + 0.4 * Math.sin(G.t * 6)})` : UI_GOLD_DARK; ctx.lineWidth = ready ? 2 : 1; ctx.strokeRect(x - 0.5, y - 0.5, w + 1, 11);
+    ctx.textAlign = 'left'; ctx.fillStyle = ready ? YELLOW : '#fbcfe8';
+    ctx.fillText(ready ? '可以感化！' : `${v} / ${max}`, x + w + 6, y + 9);
+    if (G.mercyPop) {
+        G.mercyPop.t += 1 / 60;
+        if (G.mercyPop.t > 1.8) G.mercyPop = null;
+        else {
+            ctx.globalAlpha = Math.max(0, 1 - G.mercyPop.t / 1.8); ctx.font = `900 14px ${FONT}`; ctx.fillStyle = '#f9a8d4'; ctx.textAlign = 'center';
+            ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(G.mercyPop.text, 320, y - 8 - G.mercyPop.t * 10); ctx.fillText(G.mercyPop.text, 320, y - 8 - G.mercyPop.t * 10);
+            ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+        }
+    }
+}
+
+// 光之加護（第二階段的復活次數）：極限技量表下方的小水晶
+function drawRevives() {
+    if (!G || G.phase !== 2 || G.revives === undefined || G.bossGone || G.state === 'done') return;
+    const max = maxRevives(), x = 470, y = 30;
+    ctx.font = `bold 11px ${FONT}`; ctx.fillStyle = G.revives ? '#bae6fd' : '#8a7d63'; ctx.textAlign = 'right';
+    ctx.fillText('光之加護', x - 6, y + 4); ctx.textAlign = 'left';
+    for (let i = 0; i < max; i++) {
+        const cx = x + 6 + i * 16, on = i < G.revives;
+        ctx.beginPath(); ctx.moveTo(cx, y - 6); ctx.lineTo(cx + 5, y); ctx.lineTo(cx, y + 6); ctx.lineTo(cx - 5, y); ctx.closePath();
+        ctx.fillStyle = on ? '#7dd3fc' : '#2a2117'; ctx.fill();
+        ctx.strokeStyle = on ? '#e0f2fe' : UI_GOLD_DARK; ctx.lineWidth = 1; ctx.stroke();
+    }
+}
+
 // 極限技量表：畫面右上角（FF14 的 LB 條）
 function drawLBGauge() {
     if (!G || ['done'].includes(G.state)) return;
@@ -4020,7 +4280,7 @@ function drawHUD() {
         if (i === 3 && G.state === 'breaking' && G.stateT > 0.9) return;
         const x = 32 + i * 148, y = 432, w = 132, h = 38;
         const sel = G.state === 'menu' && G.menuIdx === i;
-        const ready = i === 3 && G.mercyReady;
+        const ready = i === 3 && (G.mercyReady || (G.phase === 1 && !G.mercyBroken && G.mercy >= CFG().MERCY_BREAK_AT));
         // 破碎前的裂痕
         let ox = 0;
         if (i === 3 && G.state === 'breaking') ox = (Math.random() - 0.5) * 6 * G.stateT;
@@ -4125,6 +4385,7 @@ function draw() {
     if (G.state === 'quiz' || G.quizShowing) drawQuiz();
     drawBoxText();
     drawCast();
+    drawMercyGauge();
     drawDebuffs();
     drawDelayed();
     drawBubble();
@@ -4166,6 +4427,7 @@ function draw() {
     if (G.state === 'cutin') drawCutin();
     if (G.state === 'lbAnim') drawLBAnim();
     drawLBGauge();
+    drawRevives();
     if (G.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${G.flash})`; ctx.fillRect(-20, -20, W + 40, H + 40); }
     ctx.restore();
 }
@@ -4206,6 +4468,11 @@ $('againBtn').addEventListener('click', () => {
     $('victory').classList.remove('show');
     startTime = Date.now();
     newBattle();
+});
+$('fullBtn').addEventListener('click', () => {
+    $('victory').classList.remove('show');
+    startTime = Date.now();
+    newBattle(false, true);
 });
 $('ultBtn').addEventListener('click', () => {
     $('victory').classList.remove('show');

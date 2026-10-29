@@ -1210,12 +1210,12 @@ function noteTeamCleared(d) {
     teamCleared = { winner: d.winner || '隊友', clearSec: d.clearSec ?? null };
     deadlineAt = null;     // 隊伍已經贏了，之後的戰鬥不再計時
 }
-function submitClear() {
+function submitClear(kind) {
     const note = document.getElementById('winNote');
     note.innerHTML = '⏳ 正在把勝利記錄到魔書……';
     fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'boss_clear', code: playerCode, name: playerName, battleKey: CONFIG.BATTLE_KEY })
+        body: JSON.stringify({ action: 'boss_clear', code: playerCode, name: playerName, battleKey: CONFIG.BATTLE_KEY, route: kind })
     }).then(r => r.json()).then(res => {
         if (res.status === 'success' && res.first) {
             note.innerHTML = `🏆 勝利已記錄！第 17 枚紋章已封印進魔書<br>` +
@@ -1250,7 +1250,7 @@ function showVictory(kind) {
     document.getElementById('victory').classList.add('show');
     setState('done');
     // 正式挑戰（非完整版／絕難度）才自動記錄通關
-    if (timedRun && !G.ultimate && !G.full) submitClear();
+    if (timedRun && !G.ultimate && !G.full) submitClear(kind);
     else document.getElementById('winNote').innerHTML = '（純挑戰模式，不計入獎勵）';
 }
 

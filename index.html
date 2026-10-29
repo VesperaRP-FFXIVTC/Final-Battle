@@ -48,6 +48,8 @@
     <div class="panel">
         <h1>魔王城・王座之間</h1>
         <div class="sub">紅貓魔王就在門的另一側。<br>出示你的契約與鑰匙吧，光之戰士。</div>
+        <label for="nameInput">你的角色名稱</label>
+        <input id="nameInput" maxlength="40" autocomplete="off" placeholder="例如：Inu@泰坦" style="text-transform:none; letter-spacing:1px;">
         <label for="codeInput">魔書契約碼</label>
         <input id="codeInput" maxlength="4" autocomplete="off" placeholder="XXXX">
         <label for="keyInput">通關鑰匙</label>
@@ -1166,6 +1168,7 @@ let timerStarted = false;    // 關主是否已經按下「開始計時」
 // 與魔書同步：每 20 秒向伺服器重新確認一次計時（關主開始、重設計時都會即時反映）
 function applyTimer(d) {
     if (!timedRun || d.status !== 'success') return;
+    if (d.clearedAt) { noteTeamCleared(d); return; }
     timerStarted = !!d.startedAt;
     if (!d.startedAt) { deadlineAt = null; return; }
     const offset = d.serverNow ? new Date(d.serverNow).getTime() - Date.now() : 0;
@@ -1198,6 +1201,39 @@ function showTimeUp() {
     setState('done');
 }
 
+// ----- 通關紀錄（同一隊共用一本魔書，只記錄第一位擊敗魔王的人）-----
+let playerName = '';
+let teamCleared = null;   // 隊友已經通關時：{ winner, clearSec }
+const fmtSec = t => `${Math.floor(t / 60)} 分 ${t % 60} 秒`;
+function noteTeamCleared(d) {
+    if (!d.clearedAt || teamCleared) return;
+    teamCleared = { winner: d.winner || '隊友', clearSec: d.clearSec ?? null };
+    deadlineAt = null;     // 隊伍已經贏了，之後的戰鬥不再計時
+}
+function submitClear() {
+    const note = document.getElementById('winNote');
+    note.innerHTML = '⏳ 正在把勝利記錄到魔書……';
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'boss_clear', code: playerCode, name: playerName, battleKey: CONFIG.BATTLE_KEY })
+    }).then(r => r.json()).then(res => {
+        if (res.status === 'success' && res.first) {
+            note.innerHTML = `🏆 勝利已記錄！第 17 枚紋章已封印進魔書<br>` +
+                (res.clearSec != null ? `通關時間 ${fmtSec(res.clearSec)}・` : '') + `擊敗者：${escapeName(res.winner)}`;
+        } else if (res.status === 'success') {
+            note.innerHTML = `🏆 你的隊伍已經通關了！<br>${escapeName(res.winner || '隊友')} 已先一步擊敗魔王` +
+                (res.clearSec != null ? `（通關時間 ${fmtSec(res.clearSec)}）` : '');
+        } else if (res.reason === 'TIME_UP') {
+            showTimeUp();
+        } else {
+            note.innerHTML = `⚠️ 紀錄失敗：${escapeName(res.message || '未知錯誤')}<br>請將此畫面出示給紅貓魔王 INU，由關主協助蓋章`;
+        }
+    }).catch(() => {
+        note.innerHTML = '⚠️ 網路不穩，紀錄失敗……<br>請將此畫面出示給紅貓魔王 INU，由關主協助蓋章';
+    });
+}
+const escapeName = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 function showVictory(kind) {
     if (timeLeft() <= 0) { showTimeUp(); return; }   // 打完時已經超過時限 → 視為失敗
     document.getElementById('againBtn').style.display = '';
@@ -1213,6 +1249,9 @@ function showVictory(kind) {
         (deadlineAt !== null ? `<br>距離時限還剩 ${Math.floor(timeLeft() / 60000)} 分 ${Math.floor(timeLeft() / 1000) % 60} 秒` : '');
     document.getElementById('victory').classList.add('show');
     setState('done');
+    // 正式挑戰（非完整版／絕難度）才自動記錄通關
+    if (timedRun && !G.ultimate && !G.full) submitClear();
+    else document.getElementById('winNote').innerHTML = '（純挑戰模式，不計入獎勵）';
 }
 
 // ----- 受傷與死亡 -----
@@ -4364,7 +4403,13 @@ function drawHUD() {
         ctx.fillText(G.route === 'rage' ? 'PHASE 2 ・ 震怒' : 'PHASE 2', 530, 418);
     }
     if (muted) { ctx.font = `12px ${FONT}`; ctx.fillStyle = '#666'; ctx.fillText('🔇 靜音（M）', 560, 20); }
-    if (timedRun && deadlineAt === null && G.state !== 'done') {   // 關主還沒開始計時
+    if (teamCleared && G.state !== 'done') {   // 隊友已經通關
+        ctx.font = `bold 14px ${FONT}`; ctx.textAlign = 'center';
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        const msg = `🏆 隊友 ${teamCleared.winner} 已擊敗紅貓魔王！之後的戰鬥不計時`;
+        ctx.strokeText(msg, 320, 44); ctx.fillStyle = '#fbbf24'; ctx.fillText(msg, 320, 44);
+        ctx.textAlign = 'left';
+    } else if (timedRun && deadlineAt === null && G.state !== 'done') {   // 關主還沒開始計時
         ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = '#a78bca';
         ctx.fillText('⏳ 等待關主開始計時', 8, GOD ? 54 : 20);
     }
@@ -4496,10 +4541,13 @@ function gateError(msg) { $('gateErr').textContent = msg; }
 $('enterBtn').addEventListener('click', () => {
     const code = $('codeInput').value.trim().toUpperCase();
     const key = $('keyInput').value.trim().toUpperCase();
+    if (!$('nameInput').value.trim()) return gateError('請輸入你的角色名稱，擊敗魔王時會用來記錄。');
     if (!/^[A-Z0-9]{4}$/.test(code)) return gateError('請輸入 4 碼的魔書契約碼。');
     if (key !== CONFIG.BATTLE_KEY.toUpperCase()) return gateError('鑰匙不對……大門紋風不動。');
     const go = () => {
         playerCode = code;
+        playerName = $('nameInput').value.trim();
+        try { localStorage.setItem('sealhunter_player_name', playerName); } catch (e) {}
         $('gate').classList.remove('show');
         initAudio();
         startTime = Date.now();
@@ -4522,7 +4570,9 @@ $('enterBtn').addEventListener('click', () => {
         .catch(() => gateError('魔力傳輸中斷，請檢查網路後再試。'))
         .finally(() => { $('enterBtn').disabled = false; });
 });
-['codeInput', 'keyInput'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('enterBtn').click(); }));
+['nameInput', 'codeInput', 'keyInput'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('enterBtn').click(); }));
+// 記住上次輸入的角色名稱
+try { const n = localStorage.getItem('sealhunter_player_name'); if (n) $('nameInput').value = n; } catch (e) {}
 $('againBtn').addEventListener('click', () => {
     if (timeLeft() <= 0) { showTimeUp(); return; }
     $('victory').classList.remove('show');

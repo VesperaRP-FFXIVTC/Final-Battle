@@ -69,7 +69,7 @@
         <div class="win-route" id="winRoute"></div>
         <div class="win-code" id="winCode"></div>
         <div class="win-meta" id="winMeta"></div>
-        <div class="win-note">請將此畫面出示給紅貓魔王 INU<br>領取最後的紋章</div>
+        <div class="win-note" id="winNote">請將此畫面出示給紅貓魔王 INU<br>領取最後的紋章</div>
         <div class="tribute">
             戰鬥玩法致敬 Toby Fox《UNDERTALE》與《FINAL FANTASY XIV》<br>
             非營利玩家同人作品，與原作及其版權方無關<br>
@@ -1157,7 +1157,50 @@ function ending(kind) {
         say([E.narr], () => showVictory(kind));
     });
 }
+// ----- 冒險限時（由關主在派發後台按下「開始計時」）-----
+// 在時限內進城就能挑戰，但必須在時限內打完；時間到的瞬間視為挑戰失敗
+let deadlineAt = null;       // 本機時間的截止時刻（ms），null = 沒有計時
+let timedRun = false;        // 正式挑戰才計時（完整版、絕難度是純挑戰，不計時）
+let timerStarted = false;    // 關主是否已經按下「開始計時」
+
+// 與魔書同步：每 20 秒向伺服器重新確認一次計時（關主開始、重設計時都會即時反映）
+function applyTimer(d) {
+    if (!timedRun || d.status !== 'success') return;
+    timerStarted = !!d.startedAt;
+    if (!d.startedAt) { deadlineAt = null; return; }
+    const offset = d.serverNow ? new Date(d.serverNow).getTime() - Date.now() : 0;
+    deadlineAt = new Date(d.startedAt).getTime() + (d.limitMin || 60) * 60000 - offset;
+}
+setInterval(() => {
+    if (!timedRun || !playerCode || !G || G.state === 'done') return;
+    fetch(`${API_URL}?action=get_stamps&code=${encodeURIComponent(playerCode)}`)
+        .then(r => r.json()).then(applyTimer).catch(() => {});
+}, 20000);
+let timeUpDone = false;
+const timeLeft = () => deadlineAt === null ? Infinity : deadlineAt - Date.now();
+function checkTimeUp() {
+    if (timeUpDone || deadlineAt === null || !G || G.state === 'done') return;
+    if (timeLeft() <= 0) showTimeUp();
+}
+function showTimeUp() {
+    timeUpDone = true;
+    if (bgm) bgm.pause();
+    SFX.shatter();
+    document.getElementById('winTitle').textContent = '挑戰失敗';
+    document.getElementById('winRoute').textContent = '⏰ 已超過冒險時限';
+    document.getElementById('winCode').textContent = playerCode;
+    const now = new Date();
+    document.getElementById('winMeta').innerHTML = `時限結束於 ${now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+    document.getElementById('winNote').innerHTML = '冒險的時間已經結束了……<br>紅貓魔王的封印未能完成。<br>請回到起點找關主結算報酬。';
+    document.getElementById('againBtn').style.display = 'none';   // 正式挑戰不能再重來
+    // 「完整版」「絕難度」是純挑戰、不計入獎勵，時間到之後仍然可以玩
+    document.getElementById('victory').classList.add('show');
+    setState('done');
+}
+
 function showVictory(kind) {
+    if (timeLeft() <= 0) { showTimeUp(); return; }   // 打完時已經超過時限 → 視為失敗
+    document.getElementById('againBtn').style.display = '';
     const E = ENDINGS[kind];
     const secs = Math.round((Date.now() - startTime) / 1000);
     document.getElementById('winTitle').textContent = (G.ultimate ? '絕・' : G.full ? '完整版・' : '') + E.title;
@@ -1166,7 +1209,8 @@ function showVictory(kind) {
     document.getElementById('winCode').textContent = playerCode;
     const now = new Date();
     document.getElementById('winMeta').innerHTML =
-        `挑戰時間 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒<br>完成於 ${now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+        `挑戰時間 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒<br>完成於 ${now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}` +
+        (deadlineAt !== null ? `<br>距離時限還剩 ${Math.floor(timeLeft() / 60000)} 分 ${Math.floor(timeLeft() / 1000) % 60} 秒` : '');
     document.getElementById('victory').classList.add('show');
     setState('done');
 }
@@ -3631,7 +3675,7 @@ let last = performance.now();
 function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (G) { update(dt); draw(); }
+    if (G) { update(dt); draw(); checkTimeUp(); }
     pressed.clear();
     requestAnimationFrame(frame);
 }
@@ -4320,6 +4364,17 @@ function drawHUD() {
         ctx.fillText(G.route === 'rage' ? 'PHASE 2 ・ 震怒' : 'PHASE 2', 530, 418);
     }
     if (muted) { ctx.font = `12px ${FONT}`; ctx.fillStyle = '#666'; ctx.fillText('🔇 靜音（M）', 560, 20); }
+    if (timedRun && deadlineAt === null && G.state !== 'done') {   // 關主還沒開始計時
+        ctx.font = `bold 13px ${FONT}`; ctx.fillStyle = '#a78bca';
+        ctx.fillText('⏳ 等待關主開始計時', 8, GOD ? 54 : 20);
+    }
+    if (deadlineAt !== null && G.state !== 'done') {   // 剩餘冒險時間
+        const left = Math.max(0, timeLeft()), m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
+        const y = GOD ? 54 : 20;
+        ctx.font = `bold 14px ${FONT}`;
+        ctx.fillStyle = left < 60000 ? (Math.floor(Date.now() / 400) % 2 ? '#ef4444' : '#fca5a5') : left < 5 * 60000 ? '#fbbf24' : '#86efac';
+        ctx.fillText(`⏳ 剩餘 ${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`, 8, y);
+    }
     if (volShowT > 0) {
         volShowT -= 1 / 60;
         ctx.font = `bold 12px ${FONT}`; ctx.fillStyle = '#ccc'; ctx.textAlign = 'right';
@@ -4450,14 +4505,18 @@ $('enterBtn').addEventListener('click', () => {
         startTime = Date.now();
         newBattle();
     };
-    if (!CONFIG.REQUIRE_STAMP) return go();
+    if (!CONFIG.REQUIRE_STAMP) { timedRun = true; timeUpDone = false; return go(); }
     $('enterBtn').disabled = true;
     gateError('');
     fetch(`${API_URL}?action=get_stamps&code=${encodeURIComponent(code)}`)
         .then(r => r.json())
         .then(d => {
             if (d.status !== 'success') return gateError('查無此契約碼。');
-            if (!d.stamps.map(Number).includes(CONFIG.REQUIRE_STAMP)) return gateError('你還沒有通過魔王城入口的考驗。');
+            if (!d.stamps.map(Number).includes(CONFIG.REQUIRE_STAMP)) return gateError('你還沒有取得第 16 枚紋章……請先向近衛騎士說出通關密碼。');
+            // 計時：以伺服器時間換算成本機的截止時刻
+            deadlineAt = null; timeUpDone = false; timedRun = true;
+            applyTimer(d);
+            if (timeLeft() <= 0) return gateError('冒險的時間已經結束了……請回到起點找關主結算報酬。');
             go();
         })
         .catch(() => gateError('魔力傳輸中斷，請檢查網路後再試。'))
@@ -4465,16 +4524,19 @@ $('enterBtn').addEventListener('click', () => {
 });
 ['codeInput', 'keyInput'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('enterBtn').click(); }));
 $('againBtn').addEventListener('click', () => {
+    if (timeLeft() <= 0) { showTimeUp(); return; }
     $('victory').classList.remove('show');
     startTime = Date.now();
     newBattle();
 });
 $('fullBtn').addEventListener('click', () => {
+    deadlineAt = null; timeUpDone = false; timedRun = false;   // 純挑戰不計入獎勵，所以不計時
     $('victory').classList.remove('show');
     startTime = Date.now();
     newBattle(false, true);
 });
 $('ultBtn').addEventListener('click', () => {
+    deadlineAt = null; timeUpDone = false; timedRun = false;   // 純挑戰不計入獎勵，所以不計時
     $('victory').classList.remove('show');
     startTime = Date.now();
     newBattle(true);
